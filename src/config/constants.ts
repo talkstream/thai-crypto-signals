@@ -23,3 +23,11 @@ export const ALLOWED_CADENCES = [1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30] as const;
 
 /** A tick whose price moves >= this factor vs the immediately-preceding bucket is flagged. */
 export const SANITY_JUMP_FACTOR = 10n;
+
+/**
+ * Maximum trusted clock skew between Bitkub's server time and the local (Cloudflare) clock.
+ * Beyond this we fall back to the local clock — a far-future server time must never set a
+ * future bucket (which would win MAX(bucket_ts), look "fresh" via negative age, and dodge
+ * retention pruning).
+ */
+export const MAX_SKEW_MS = 5 * 60_000;

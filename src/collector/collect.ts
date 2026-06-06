@@ -1,6 +1,6 @@
 import { type RawTickerEntry, safeParseTickerEntry } from '../adapters/bitkub/schemas';
 import { bucketTsFor } from '../config/cadence';
-import { SANITY_JUMP_FACTOR } from '../config/constants';
+import { MAX_SKEW_MS, SANITY_JUMP_FACTOR } from '../config/constants';
 import { type LatestDto, type LatestEntryDto, toLatestEntry } from '../domain/dto';
 import {
   BitkubHttpError,
@@ -153,6 +153,11 @@ export async function collect(deps: CollectDeps): Promise<void> {
   try {
     serverMs = await marketData.getServerTime();
     skewMs = serverMs - clock.now();
+    if (Math.abs(skewMs) > MAX_SKEW_MS) {
+      // implausible skew (e.g. a poisoned far-future time): trust the local clock instead
+      serverMs = clock.now();
+      skewMs = null;
+    }
   } catch {
     serverMs = clock.now();
     skewMs = null;
@@ -197,8 +202,7 @@ export async function collect(deps: CollectDeps): Promise<void> {
       driftCount += 1;
       continue;
     }
-    if (seen.has(sym.id)) continue; // duplicate symbol in the ticker (D1 would OR-IGNORE it)
-    seen.add(sym.id);
+    if (seen.has(sym.id)) continue; // already collected this symbol this tick
     let snapshot: TickerSnapshot;
     try {
       snapshot = mapEntry(entry, sym, bucketTs, serverMs);
@@ -212,6 +216,7 @@ export async function collect(deps: CollectDeps): Promise<void> {
       }
       continue;
     }
+    seen.add(sym.id); // only after a successful map: a malformed first dup must not block a valid later one
     const priorEntry = prior.get(sym.id);
     if (priorEntry !== undefined) {
       // Normalize the prior price to the current scale so a scale change is not a phantom jump.

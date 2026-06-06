@@ -165,6 +165,18 @@ describe('collect — happy path & catalog', () => {
     expect(row?.server_ts_ms).toBeNull();
     expect(row?.skew_ms).toBeNull();
   });
+
+  it('ignores an implausibly skewed (far-future) server time, using the local clock', async () => {
+    await seedSymbols();
+    routeFetch({ servertime: () => Response.json(SERVER_MS + 600_000) }); // +10 min skew
+    await collect(makeDeps());
+    const row = await db
+      .prepare("SELECT skew_ms FROM collection_runs WHERE bucket_ts = ? AND kind = 'collect'")
+      .bind(BUCKET) // bucket came from the local clock, not the poisoned future time
+      .first<{ skew_ms: number | null }>();
+    expect(row).not.toBeNull();
+    expect(row?.skew_ms).toBeNull();
+  });
 });
 
 describe('collect — per-entry tolerance', () => {
@@ -329,6 +341,21 @@ describe('collect — per-entry tolerance', () => {
       JSON.parse(cached ?? '{"entries":[]}') as { entries: Array<{ symbol: string }> }
     ).entries;
     expect(entries.filter((e) => e.symbol === 'BTC_THB').length).toBe(1);
+  });
+
+  it('a malformed first duplicate does not block a valid later one', async () => {
+    await seedSymbols();
+    routeFetch({
+      ticker: () =>
+        Response.json([tickerEntry({ last: 'abc' }), tickerEntry({ last: '2017050.88' })]),
+    });
+    await collect(makeDeps());
+    expect(await snapshotCount()).toBe(1);
+    const row = await db
+      .prepare('SELECT last_minor FROM ticker_snapshots WHERE bucket_ts = ?')
+      .bind(BUCKET)
+      .first<{ last_minor: number }>();
+    expect(row?.last_minor).toBe(201705088); // the valid second entry was collected
   });
 
   it('emits an overlap event and does NOT update KV on a duplicate fire', async () => {

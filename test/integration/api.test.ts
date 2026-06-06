@@ -324,4 +324,13 @@ describe('read API on an empty / sparse DB', () => {
     };
     expect(body.points[0]?.last).toBe('1.2345'); // scale 4, not the catalog's scale 2
   });
+
+  it('health is not-ok when the latest observation is in the future', async () => {
+    const ids = await seedSymbols();
+    const btc = ids.get('BTC_THB');
+    if (btc === undefined) throw new Error('seed');
+    await insertSnap(btc, NOW + 3_600_000, 200000000, null); // observed 1h in the future
+    const body = (await (await get('/health')).json()) as { ok: boolean };
+    expect(body.ok).toBe(false);
+  });
 });

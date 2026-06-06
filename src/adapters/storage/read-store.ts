@@ -90,7 +90,8 @@ export class D1ReadStore implements ReadStore {
       .first<{ n: number }>()) ?? { n: 0 };
     const lastObservedMs = observed.m;
     return {
-      ok: lastObservedMs !== null && nowMs - lastObservedMs <= freshMs,
+      ok:
+        lastObservedMs !== null && nowMs - lastObservedMs >= 0 && nowMs - lastObservedMs <= freshMs,
       nowMs,
       lastCollectBucketTs: lastRun?.bucket_ts ?? null,
       lastCollectStatus: lastRun?.status ?? null,
