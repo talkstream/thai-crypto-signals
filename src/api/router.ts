@@ -24,9 +24,9 @@ const jsonRaw = (serialized: string): Response =>
   new Response(serialized, { status: 200, headers: JSON_HEADERS });
 
 // Canonical serialization so a KV hit and a D1 rebuild are byte-identical (sorted, no writtenAtMs).
-function serializeLatest(dto: LatestDto): string {
+function serializeLatest(dto: LatestDto, stale: boolean): string {
   const entries = [...dto.entries].sort((a, b) => a.symbol.localeCompare(b.symbol));
-  return JSON.stringify({ bucketTs: dto.bucketTs, entries });
+  return JSON.stringify({ bucketTs: dto.bucketTs, stale, entries });
 }
 
 function clampInt(raw: string | null, fallback: number, min: number, max: number): number {
@@ -43,13 +43,15 @@ async function latest(deps: ApiDeps): Promise<Response> {
       // Serve the hot cache only while it is fresh; a stalled collector must not serve
       // obsolete data indefinitely. Fresh hit == D1 rebuild (same collect wrote both).
       if (deps.clock.now() - dto.bucketTs <= deps.freshMs) {
-        return jsonRaw(serializeLatest(dto));
+        return jsonRaw(serializeLatest(dto, false));
       }
     } catch {
       // corrupt cache value — treat as a miss and rebuild from D1
     }
   }
-  return jsonRaw(serializeLatest(await deps.store.latest()));
+  // Rebuild from D1, flagging staleness explicitly so a stalled collector is visible to clients.
+  const rebuilt = await deps.store.latest();
+  return jsonRaw(serializeLatest(rebuilt, deps.clock.now() - rebuilt.bucketTs > deps.freshMs));
 }
 
 export async function handleRequest(req: Request, deps: ApiDeps): Promise<Response> {

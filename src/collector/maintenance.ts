@@ -82,8 +82,8 @@ export async function maintenance(deps: MaintenanceDeps): Promise<void> {
     .run();
   const runsCutoff = now - runsRetentionDays * DAY_MS;
   const runsRes = await db
-    .prepare('DELETE FROM collection_runs WHERE started_ms < ? AND kind = ?')
-    .bind(runsCutoff, 'collect')
+    .prepare('DELETE FROM collection_runs WHERE started_ms < ?')
+    .bind(runsCutoff)
     .run();
   const hourlyCutoff = now - rollups1hRetentionDays * DAY_MS;
   const hourlyRes = await db

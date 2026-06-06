@@ -314,6 +314,23 @@ describe('collect — per-entry tolerance', () => {
     expect(obs.events.some((e) => e.kind === 'sanity_jump')).toBe(false);
   });
 
+  it('dedupes a duplicate symbol within one tick (KV/D1 stay consistent)', async () => {
+    await seedSymbols();
+    routeFetch({ ticker: () => Response.json([tickerEntry(), tickerEntry({ last: '1.00' })]) }); // two BTC_THB
+    await collect(makeDeps());
+    expect(await snapshotCount()).toBe(1);
+    const row = await db
+      .prepare("SELECT rows_inserted, rows_skipped FROM collection_runs WHERE kind = 'collect'")
+      .first<{ rows_inserted: number; rows_skipped: number }>();
+    expect(row?.rows_inserted).toBe(1);
+    expect(row?.rows_skipped).toBe(1); // the duplicate counted as skipped
+    const cached = await env.CACHE.get('latest:v1');
+    const entries = (
+      JSON.parse(cached ?? '{"entries":[]}') as { entries: Array<{ symbol: string }> }
+    ).entries;
+    expect(entries.filter((e) => e.symbol === 'BTC_THB').length).toBe(1);
+  });
+
   it('emits an overlap event and does NOT update KV on a duplicate fire', async () => {
     await seedSymbols();
     routeFetch({ ticker: () => Response.json([tickerEntry()]) });

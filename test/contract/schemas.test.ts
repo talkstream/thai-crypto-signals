@@ -73,7 +73,18 @@ describe('servertime', () => {
   });
 
   it('rejects implausible / malformed values without silent coercion', () => {
-    for (const bad of ['not-a-number', true, false, null, 0, '123', '']) {
+    const bads: unknown[] = [
+      'not-a-number',
+      true,
+      false,
+      null,
+      0,
+      '123', // too short
+      '',
+      '5000000000000', // 5e12: digit string above the upper bound
+      5_000_000_000_000, // number above the upper bound
+    ];
+    for (const bad of bads) {
       expect(() => parseServerTime(bad)).toThrow(PayloadValidationError);
     }
   });

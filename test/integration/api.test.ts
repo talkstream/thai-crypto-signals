@@ -242,9 +242,11 @@ describe('read API on an empty / sparse DB', () => {
   it('latest is empty with bucketTs 0', async () => {
     const body = JSON.parse(await (await get('/v1/tickers/latest')).text()) as {
       bucketTs: number;
+      stale: boolean;
       entries: unknown[];
     };
     expect(body.bucketTs).toBe(0);
+    expect(body.stale).toBe(true); // no data -> stale
     expect(body.entries).toEqual([]);
   });
 

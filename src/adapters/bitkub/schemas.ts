@@ -71,12 +71,16 @@ export function parseSymbols(raw: unknown): CatalogEntry[] {
 
 // Strict: a plausible epoch-ms timestamp only. Rejects null/false/true/'' (which z.coerce
 // would silently turn into 0/1) so a malformed response falls back to the local clock.
+// Bounded to a sane epoch-ms window (~2001..~2096) on BOTH branches, so an absurd digit string
+// (e.g. 1e36) or oversized number is rejected rather than producing a garbage bucket.
+const PLAUSIBLE_EPOCH_MS = z.number().int().gt(1_000_000_000_000).lt(4_000_000_000_000);
 const ServerTime = z.union([
-  z.number().int().gt(1_000_000_000_000),
+  PLAUSIBLE_EPOCH_MS,
   z
     .string()
     .regex(/^\d{13,}$/)
-    .transform(Number),
+    .transform(Number)
+    .pipe(PLAUSIBLE_EPOCH_MS),
 ]);
 
 export function parseServerTime(raw: unknown): number {

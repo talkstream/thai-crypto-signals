@@ -185,6 +185,7 @@ export async function collect(deps: CollectDeps): Promise<void> {
   const latest: LatestEntryDto[] = [];
   let driftCount = 0;
   let scaleOverflowCount = 0;
+  const seen = new Set<number>();
   for (const rawEntry of raw) {
     const entry = safeParseTickerEntry(rawEntry);
     if (!entry) {
@@ -196,6 +197,8 @@ export async function collect(deps: CollectDeps): Promise<void> {
       driftCount += 1;
       continue;
     }
+    if (seen.has(sym.id)) continue; // duplicate symbol in the ticker (D1 would OR-IGNORE it)
+    seen.add(sym.id);
     let snapshot: TickerSnapshot;
     try {
       snapshot = mapEntry(entry, sym, bucketTs, serverMs);
