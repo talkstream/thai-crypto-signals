@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { INT64_MAX } from '../../src/config/constants';
+import { MAX_SAFE_MINOR } from '../../src/config/constants';
 import { DecimalParseError, ScaleOverflowError } from '../../src/domain/errors';
 import {
   formatMinorToDecimal,
@@ -38,10 +38,14 @@ describe('parseDecimalToMinor', () => {
     expect(() => parseDecimalToMinor('', 2)).toThrow(DecimalParseError);
   });
 
-  it('throws ScaleOverflow when scaled value exceeds int64 (>=1000000 @ scale 13)', () => {
+  it('throws ScaleOverflow above the lossless range, accepts the boundary', () => {
+    // 1000000 @ scale 13 = 1e19, far above 2^53 -> overflow
     expect(() => parseDecimalToMinor('1000000', 13, 'BABYDOGE_THB')).toThrow(ScaleOverflowError);
-    // exact boundary: INT64_MAX itself must NOT throw
-    expect(parseDecimalToMinor(INT64_MAX.toString(), 0)).toBe(INT64_MAX);
+    // exact boundary: MAX_SAFE_MINOR must NOT throw, one above must throw
+    expect(parseDecimalToMinor(MAX_SAFE_MINOR.toString(), 0)).toBe(MAX_SAFE_MINOR);
+    expect(() => parseDecimalToMinor((MAX_SAFE_MINOR + 1n).toString(), 0)).toThrow(
+      ScaleOverflowError,
+    );
   });
 });
 
@@ -69,15 +73,12 @@ describe('pctToBasisPoints', () => {
 });
 
 describe('round-trip property (bigint -> string -> bigint is exact, scale 1..13)', () => {
-  it('holds over the bounded int64 domain', () => {
+  it('holds over the lossless minor-unit domain', () => {
     fc.assert(
       fc.property(
-        fc.bigInt({ min: 0n, max: INT64_MAX }),
+        fc.bigInt({ min: 0n, max: MAX_SAFE_MINOR }),
         fc.integer({ min: 1, max: 13 }),
-        (m, s) => {
-          const round = parseDecimalToMinor(formatMinorToDecimal(m, s), s);
-          return round === m;
-        },
+        (m, s) => parseDecimalToMinor(formatMinorToDecimal(m, s), s) === m,
       ),
       { seed: 42, numRuns: 2000 },
     );

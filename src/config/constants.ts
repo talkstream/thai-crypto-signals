@@ -1,7 +1,12 @@
 // Frozen, dependency-free constants. No wall-clock, no I/O.
 
-/** Maximum signed 64-bit integer; D1 INTEGER columns bind bigint losslessly up to this. */
-export const INT64_MAX = 9223372036854775807n;
+/**
+ * Lossless storage ceiling for minor-unit prices. Verified empirically against the
+ * D1/Miniflare runtime: D1 rejects bigint binds (D1_TYPE_ERROR) and returns INTEGER columns
+ * as JS `number`, which is exact only up to 2^53-1. So we bind Number(minor) — always within
+ * this bound for real Bitkub prices — and reject anything larger via ScaleOverflow.
+ */
+export const MAX_SAFE_MINOR = 9007199254740991n; // === BigInt(Number.MAX_SAFE_INTEGER)
 
 /** Basis points = percent * 100, i.e. a decimal scale of 2 applied to percent_change. */
 export const PCT_BP_SCALE = 2;

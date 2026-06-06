@@ -1,6 +1,6 @@
 // NO-FLOAT price math. Decimal strings <-> bigint minor units, exact to int64.
 
-import { INT64_MAX, PCT_BP_SCALE } from '../config/constants';
+import { MAX_SAFE_MINOR, PCT_BP_SCALE } from '../config/constants';
 import { DecimalParseError, ScaleOverflowError } from './errors';
 
 const DECIMAL_RE = /^-?\d+(\.\d+)?$/;
@@ -21,7 +21,7 @@ export function parseDecimalToMinor(raw: string, scale: number, symbol = ''): bi
   const frac = fracRaw.length >= scale ? fracRaw.slice(0, scale) : fracRaw.padEnd(scale, '0');
 
   const magnitude = BigInt(`${intPart}${frac}`);
-  if (magnitude > INT64_MAX) throw new ScaleOverflowError(symbol, scale, raw);
+  if (magnitude > MAX_SAFE_MINOR) throw new ScaleOverflowError(symbol, scale, raw);
   return negative ? -magnitude : magnitude;
 }
 

@@ -18,7 +18,7 @@ export class ScaleOverflowError extends Error {
     readonly scale: number,
     readonly raw: string,
   ) {
-    super(`scaled value for ${symbol} ("${raw}" @ scale ${scale}) exceeds int64`);
+    super(`scaled value for ${symbol} ("${raw}" @ scale ${scale}) exceeds lossless range (2^53-1)`);
     this.name = 'ScaleOverflowError';
   }
 }
