@@ -1,7 +1,7 @@
 // Pure domain types. Prices are bigint minor units; never floats.
 
-export interface MarketSymbol {
-  id: number;
+/** A catalog entry as returned by the API (no surrogate id yet). */
+export interface CatalogEntry {
   symbol: string;
   baseAsset: string;
   quoteAsset: string;
@@ -9,6 +9,11 @@ export interface MarketSymbol {
   quoteScale: number;
   marketSegment: string;
   status: string;
+}
+
+/** A catalog entry persisted in D1, carrying the permanent surrogate id. */
+export interface MarketSymbol extends CatalogEntry {
+  id: number;
 }
 
 export type SymbolMap = ReadonlyMap<string, MarketSymbol>;

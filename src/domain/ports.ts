@@ -2,7 +2,7 @@
 // Storage ports (SymbolStore, CollectStore, RollupStore) are added in the storage layer.
 
 import type { SignalJob } from '../signals/types';
-import type { MarketSymbol } from './types';
+import type { CatalogEntry } from './types';
 
 /** Injected time source — no wall-clock anywhere else (CI-guarded). */
 export interface Clock {
@@ -21,7 +21,7 @@ export interface MarketDataSource {
   getServerTime(): Promise<number>;
   /** Envelope-validated as an array; entries stay raw for per-entry validation downstream. */
   getTicker(): Promise<unknown[]>;
-  getSymbols(): Promise<MarketSymbol[]>;
+  getSymbols(): Promise<CatalogEntry[]>;
 }
 
 /** KV write port — never authoritative, never on the idempotency path. */
