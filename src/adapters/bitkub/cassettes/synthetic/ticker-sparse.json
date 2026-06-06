@@ -1,0 +1,29 @@
+[
+  {
+    "symbol": "BTC_THB",
+    "last": "2017050.88",
+    "high_24_hr": "2071651",
+    "low_24_hr": "1950000",
+    "highest_bid": "2017050.88",
+    "lowest_ask": "2017617.96",
+    "base_volume": "300.43907158",
+    "quote_volume": "600192397.43",
+    "percent_change": "-0.94"
+  },
+  {
+    "symbol": "ALPACA_THB",
+    "last": "1.23",
+    "high_24_hr": "1.30",
+    "low_24_hr": "1.10",
+    "highest_bid": "0",
+    "lowest_ask": "0",
+    "base_volume": "0",
+    "quote_volume": "0",
+    "percent_change": "0"
+  },
+  {
+    "symbol": "BADCOIN_THB",
+    "last": 12345,
+    "highest_bid": "1"
+  }
+]

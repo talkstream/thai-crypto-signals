@@ -1,0 +1,12 @@
+[
+    {
+        "name": "Non-secure endpoints",
+        "status": "ok",
+        "message": ""
+    },
+    {
+        "name": "Secure endpoints",
+        "status": "ok",
+        "message": ""
+    }
+]

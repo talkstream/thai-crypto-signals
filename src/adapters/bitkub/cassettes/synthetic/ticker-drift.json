@@ -1,0 +1,13 @@
+[
+  {
+    "symbol": "UNLISTEDXYZ_THB",
+    "last": "1.23",
+    "high_24_hr": "1.30",
+    "low_24_hr": "1.10",
+    "highest_bid": "1.22",
+    "lowest_ask": "1.24",
+    "base_volume": "10",
+    "quote_volume": "12",
+    "percent_change": "0.5"
+  }
+]

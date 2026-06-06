@@ -1,0 +1,4 @@
+{
+  "error": 3,
+  "message": "rate limited (representative body; the adapter keys off HTTP 429 status)"
+}
