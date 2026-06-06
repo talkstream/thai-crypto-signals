@@ -10,6 +10,11 @@ notifications** (Telegram, webhooks) — that layer is scaffolded but dark in v1
 > Technical indicators have mixed empirical support; past performance does not
 > predict future results. Nothing here is a buy/sell recommendation.
 
+**Live:** `https://thai-crypto-signals.mommyslittlehelper.workers.dev` — try
+[`/health`](https://thai-crypto-signals.mommyslittlehelper.workers.dev/health) and
+[`/v1/tickers/latest`](https://thai-crypto-signals.mommyslittlehelper.workers.dev/v1/tickers/latest).
+CI deploys on push to `main`.
+
 ## Why it exists
 
 A dependable, well-tested data tap for Thai crypto markets — the kind of boring
