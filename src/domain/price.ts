@@ -1,4 +1,9 @@
-// NO-FLOAT price math. Decimal strings <-> bigint minor units, exact to int64.
+// NO-FLOAT price math — the core money lesson of this project. The exchange sends prices as
+// decimal strings; storing them as JS floats silently loses precision on large values, so we
+// convert to bigint "minor units" (an integer count of the smallest unit at the symbol's price
+// scale) and stay on integers end-to-end. The hard bound is MAX_SAFE_MINOR (2^53-1) — NOT int64
+// — because D1 returns INTEGER columns as a JS number, which is lossless only up to 2^53-1; any
+// larger value is rejected at parse time rather than corrupted later.
 
 import { MAX_SAFE_MINOR, PCT_BP_SCALE } from '../config/constants';
 import { DecimalParseError, ScaleOverflowError } from './errors';
@@ -8,7 +13,8 @@ const DECIMAL_RE = /^-?\d+(\.\d+)?$/;
 /**
  * Parse a decimal string (e.g. "2017050.88") into bigint minor units at `scale`
  * (e.g. 201705088n at scale 2). Fractional digits beyond `scale` are truncated toward
- * zero (deterministic); fewer are right-padded. Throws on malformed input or int64 overflow.
+ * zero (deterministic); fewer are right-padded. Throws on malformed input, or on overflow past
+ * the MAX_SAFE_MINOR (2^53-1) lossless bound.
  */
 export function parseDecimalToMinor(raw: string, scale: number, symbol = ''): bigint {
   if (!DECIMAL_RE.test(raw)) throw new DecimalParseError(raw, symbol);
