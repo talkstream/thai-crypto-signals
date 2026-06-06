@@ -5,9 +5,10 @@
 // Excluded : thinking, system reminders/hooks, metadata records, subagent transcripts.
 //
 // No hardcoded paths. The transcript is resolved at runtime in this order:
-//   1) JSON on stdin with { transcript_path }   (Claude Code Stop-hook payload)
-//   2) argv[2]
-//   3) newest *.jsonl under ~/.claude/projects/<cwd-with-slashes-as-dashes>
+//   1) argv[2]  (explicit path; an optional Stop-hook can pass it as an argument)
+//   2) newest *.jsonl under ~/.claude/projects/<cwd-with-slashes-as-dashes>
+// Note: stdin is deliberately NOT read — readFileSync(0) blocks on an open pipe (e.g. a
+// detached background shell), which would hang the script forever.
 // Output: <dir of transcript>/session-raw-console.md  (next to the log history).
 
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -15,15 +16,6 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 const MAX_BLOCK_CHARS = 8000;
-
-function readStdin() {
-  try {
-    const data = readFileSync(0, 'utf8');
-    return data?.trim() ? data.trim() : null;
-  } catch {
-    return null;
-  }
-}
 
 // Claude Code keeps transcripts under ~/.claude/projects/<slug>, where <slug> is the
 // project's absolute path with path separators replaced by '-'. Derived, never hardcoded.
@@ -33,15 +25,6 @@ function projectsDirForCwd() {
 }
 
 function resolveTranscriptPath() {
-  const stdin = readStdin();
-  if (stdin) {
-    try {
-      const obj = JSON.parse(stdin);
-      if (obj?.transcript_path) return obj.transcript_path;
-    } catch {
-      /* stdin was not the hook JSON */
-    }
-  }
   if (process.argv[2]) return process.argv[2];
 
   const dir = projectsDirForCwd();

@@ -2,7 +2,7 @@
 // Storage ports (SymbolStore, CollectStore, RollupStore) are added in the storage layer.
 
 import type { SignalJob } from '../signals/types';
-import type { CatalogEntry } from './types';
+import type { CatalogEntry, RunRecord, SymbolMap, TickerSnapshot } from './types';
 
 /** Injected time source — no wall-clock anywhere else (CI-guarded). */
 export interface Clock {
@@ -41,4 +41,20 @@ export interface ObservabilitySink {
 /** Queue producer port (DARK). Prod wraps env.SIGNALS_QUEUE.send; tests use an in-memory fake. */
 export interface SignalDispatcher {
   enqueue(job: SignalJob): Promise<void>;
+}
+
+/** Symbol catalog persistence. The map carries the permanent surrogate id per symbol. */
+export interface SymbolStore {
+  loadMap(): Promise<SymbolMap>;
+  upsertMany(entries: CatalogEntry[], nowMs: number): Promise<void>;
+}
+
+/** The atomic collect path: one batch commits N snapshots + the terminal run row. */
+export interface CollectStore {
+  /** Last price per symbol_id at the immediately-preceding bucket (for the 10x sanity check). */
+  priorLastBySymbol(bucketTs: number): Promise<Map<number, bigint>>;
+  /** Single atomic batch; `overlap` is true when the run row already existed (duplicate fire). */
+  commitCollect(snapshots: TickerSnapshot[], run: RunRecord): Promise<{ overlap: boolean }>;
+  /** Best-effort terminal run row when the collect batch threw before commit. */
+  failRun(run: RunRecord): Promise<void>;
 }
