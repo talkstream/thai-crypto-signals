@@ -294,6 +294,26 @@ describe('collect — per-entry tolerance', () => {
     expect(obs.events.some((e) => e.kind === 'sanity_jump')).toBe(true);
   });
 
+  it('does NOT emit a sanity_jump when only the scale changes (same price)', async () => {
+    await seedSymbols(); // BTC catalog scale 2
+    const btc = (await new D1SymbolStore(db).loadMap()).get('BTC_THB');
+    if (!btc) throw new Error('seed failed');
+    // prior stored at scale 1 with the same decimal price (2017050.8)
+    await db
+      .prepare(
+        `INSERT INTO ticker_snapshots
+          (symbol_id, bucket_ts, observed_ms, last_minor, high_minor, low_minor, price_scale_used,
+           base_volume, quote_volume, pct_change_bp, ingested_ms)
+         VALUES (?, ?, ?, 20170508, 20170508, 20170508, 1, '1', '1', 0, ?)`,
+      )
+      .bind(btc.id, PRIOR_BUCKET, PRIOR_BUCKET, PRIOR_BUCKET)
+      .run();
+    routeFetch({ ticker: () => Response.json([tickerEntry({ last: '2017050.80' })]) });
+    const obs = new InMemoryObservabilitySink();
+    await collect(makeDeps({ obs }));
+    expect(obs.events.some((e) => e.kind === 'sanity_jump')).toBe(false);
+  });
+
   it('emits an overlap event and does NOT update KV on a duplicate fire', async () => {
     await seedSymbols();
     routeFetch({ ticker: () => Response.json([tickerEntry()]) });

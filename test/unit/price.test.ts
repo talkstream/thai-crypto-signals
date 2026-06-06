@@ -6,6 +6,7 @@ import {
   formatMinorToDecimal,
   parseDecimalToMinor,
   pctToBasisPoints,
+  rescaleMinor,
 } from '../../src/domain/price';
 
 describe('parseDecimalToMinor', () => {
@@ -82,5 +83,17 @@ describe('round-trip property (bigint -> string -> bigint is exact, scale 1..13)
       ),
       { seed: 42, numRuns: 2000 },
     );
+  });
+});
+
+describe('rescaleMinor', () => {
+  it('is a no-op for an equal scale', () => {
+    expect(rescaleMinor(12345n, 2, 2)).toBe(12345n);
+  });
+  it('multiplies up for a scale increase (exact)', () => {
+    expect(rescaleMinor(10000n, 2, 4)).toBe(1000000n); // 100.00 @2 -> 100.0000 @4
+  });
+  it('divides down for a scale decrease (truncates)', () => {
+    expect(rescaleMinor(1000050n, 4, 2)).toBe(10000n); // 100.0050 @4 -> 100.00 @2
   });
 });

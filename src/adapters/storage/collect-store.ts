@@ -22,13 +22,17 @@ const RUN_SQL_IGNORE = `INSERT OR IGNORE INTO collection_runs ${RUN_COLUMNS} ${R
 export class D1CollectStore implements CollectStore {
   constructor(private readonly db: D1Database) {}
 
-  async priorLastBySymbol(bucketTs: number): Promise<Map<number, bigint>> {
+  async priorLastBySymbol(bucketTs: number): Promise<Map<number, { last: bigint; scale: number }>> {
     const { results } = await this.db
-      .prepare('SELECT symbol_id, last_minor FROM ticker_snapshots WHERE bucket_ts = ?')
+      .prepare(
+        'SELECT symbol_id, last_minor, price_scale_used FROM ticker_snapshots WHERE bucket_ts = ?',
+      )
       .bind(bucketTs)
-      .all<{ symbol_id: number; last_minor: number }>();
-    const map = new Map<number, bigint>();
-    for (const r of results) map.set(r.symbol_id, BigInt(r.last_minor));
+      .all<{ symbol_id: number; last_minor: number; price_scale_used: number }>();
+    const map = new Map<number, { last: bigint; scale: number }>();
+    for (const r of results) {
+      map.set(r.symbol_id, { last: BigInt(r.last_minor), scale: r.price_scale_used });
+    }
     return map;
   }
 

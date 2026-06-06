@@ -46,3 +46,14 @@ export function formatMinorToDecimal(minor: bigint, scale: number): string {
 export function pctToBasisPoints(raw: string): number {
   return Number(parseDecimalToMinor(raw, PCT_BP_SCALE));
 }
+
+/**
+ * Restate a minor-unit value from one price scale to another so values stored at different
+ * scales can be compared/aggregated. Exact for scale increases; truncates toward zero for
+ * decreases (lossy by definition, but scale decreases are not expected in practice).
+ */
+export function rescaleMinor(value: bigint, fromScale: number, toScale: number): bigint {
+  if (fromScale === toScale) return value;
+  if (fromScale < toScale) return value * 10n ** BigInt(toScale - fromScale);
+  return value / 10n ** BigInt(fromScale - toScale);
+}

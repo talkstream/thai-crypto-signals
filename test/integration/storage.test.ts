@@ -108,8 +108,8 @@ describe('D1CollectStore', () => {
     expect(res.overlap).toBe(false);
 
     const prior = await store.priorLastBySymbol(1000);
-    expect(prior.get(btc)).toBe(200000000n); // exact Number<->bigint round-trip
-    expect(prior.get(eth)).toBe(90000000n);
+    expect(prior.get(btc)?.last).toBe(200000000n); // exact Number<->bigint round-trip
+    expect(prior.get(eth)?.last).toBe(90000000n);
 
     const row = await db
       .prepare('SELECT bid_minor, ask_minor FROM ticker_snapshots WHERE symbol_id = ?')
@@ -133,7 +133,7 @@ describe('D1CollectStore', () => {
     expect(res2.overlap).toBe(true);
 
     const prior = await store.priorLastBySymbol(1000);
-    expect(prior.get(btc)).toBe(200000000n); // original kept (INSERT OR IGNORE)
+    expect(prior.get(btc)?.last).toBe(200000000n); // original kept (INSERT OR IGNORE)
     const runRow = await db
       .prepare('SELECT status FROM collection_runs WHERE bucket_ts = 1000 AND kind = ?')
       .bind('collect')

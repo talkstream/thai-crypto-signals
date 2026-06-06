@@ -15,6 +15,7 @@ import { consumeSignals } from './signals/consumer';
 const ROLLUP_CRON = '17 * * * *';
 const MAINTENANCE_CRON = '7 3 * * *';
 const RUNS_RETENTION_DAYS = 30;
+const ROLLUPS_1H_RETENTION_DAYS = 90;
 
 function bitkub(env: Env, clock: SystemClock): BitkubAdapter {
   return new BitkubAdapter({
@@ -45,6 +46,7 @@ export default {
         clock,
         retentionDays: Number(env.RAW_RETENTION_DAYS),
         runsRetentionDays: RUNS_RETENTION_DAYS,
+        rollups1hRetentionDays: ROLLUPS_1H_RETENTION_DAYS,
       });
       return;
     }

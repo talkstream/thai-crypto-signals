@@ -18,7 +18,7 @@ import type {
   ObservabilitySink,
   SymbolStore,
 } from '../domain/ports';
-import { parseDecimalToMinor, pctToBasisPoints } from '../domain/price';
+import { parseDecimalToMinor, pctToBasisPoints, rescaleMinor } from '../domain/price';
 import type { MarketSymbol, RunRecord, TickerSnapshot } from '../domain/types';
 
 const LATEST_KEY = 'latest:v1';
@@ -209,14 +209,18 @@ export async function collect(deps: CollectDeps): Promise<void> {
       }
       continue;
     }
-    const priorLast = prior.get(sym.id);
-    if (priorLast !== undefined && priorLast > 0n && isSanityJump(snapshot.lastMinor, priorLast)) {
-      safeEvent(
-        obs,
-        'sanity_jump',
-        { symbol: entry.symbol },
-        { last: Number(snapshot.lastMinor), prior: Number(priorLast) },
-      );
+    const priorEntry = prior.get(sym.id);
+    if (priorEntry !== undefined) {
+      // Normalize the prior price to the current scale so a scale change is not a phantom jump.
+      const priorNorm = rescaleMinor(priorEntry.last, priorEntry.scale, sym.priceScale);
+      if (priorNorm > 0n && isSanityJump(snapshot.lastMinor, priorNorm)) {
+        safeEvent(
+          obs,
+          'sanity_jump',
+          { symbol: entry.symbol },
+          { last: Number(snapshot.lastMinor), prior: Number(priorNorm) },
+        );
+      }
     }
     snapshots.push(snapshot);
     latest.push(toLatestEntry(entry.symbol, snapshot));

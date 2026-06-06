@@ -51,8 +51,8 @@ export interface SymbolStore {
 
 /** The atomic collect path: one batch commits N snapshots + the terminal run row. */
 export interface CollectStore {
-  /** Last price per symbol_id at the immediately-preceding bucket (for the 10x sanity check). */
-  priorLastBySymbol(bucketTs: number): Promise<Map<number, bigint>>;
+  /** Last price (+ its scale) per symbol_id at the immediately-preceding bucket, for the 10x check. */
+  priorLastBySymbol(bucketTs: number): Promise<Map<number, { last: bigint; scale: number }>>;
   /** Single atomic batch; `overlap` is true when the run row already existed (duplicate fire). */
   commitCollect(snapshots: TickerSnapshot[], run: RunRecord): Promise<{ overlap: boolean }>;
   /** Best-effort terminal run row when the collect batch threw before commit. */

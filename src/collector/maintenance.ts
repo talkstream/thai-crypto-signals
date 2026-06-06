@@ -12,6 +12,7 @@ export interface MaintenanceDeps {
   clock: Clock;
   retentionDays: number;
   runsRetentionDays: number;
+  rollups1hRetentionDays: number;
 }
 
 const RUN_SQL = `INSERT OR REPLACE INTO collection_runs
@@ -47,7 +48,16 @@ async function recordRun(
 
 /** Daily cron: refresh the symbol catalog, prune raw snapshots and the old collect ledger. */
 export async function maintenance(deps: MaintenanceDeps): Promise<void> {
-  const { db, marketData, symbols, obs, clock, retentionDays, runsRetentionDays } = deps;
+  const {
+    db,
+    marketData,
+    symbols,
+    obs,
+    clock,
+    retentionDays,
+    runsRetentionDays,
+    rollups1hRetentionDays,
+  } = deps;
   const now = clock.now();
   const dayTs = gmt7DayStart(now);
 
@@ -75,8 +85,23 @@ export async function maintenance(deps: MaintenanceDeps): Promise<void> {
     .prepare('DELETE FROM collection_runs WHERE started_ms < ? AND kind = ?')
     .bind(runsCutoff, 'collect')
     .run();
+  const hourlyCutoff = now - rollups1hRetentionDays * DAY_MS;
+  const hourlyRes = await db
+    .prepare('DELETE FROM rollups_1h WHERE hour_ts < ?')
+    .bind(hourlyCutoff)
+    .run();
   const rawRows = rawRes.meta.changes;
   const runRows = runsRes.meta.changes;
-  await recordRun(db, dayTs, 'prune', 'ok', pruneStart, clock.now(), rawRows + runRows, null);
-  safeEvent(obs, 'prune', { status: 'ok' }, { rawRows, runRows });
+  const hourlyRows = hourlyRes.meta.changes;
+  await recordRun(
+    db,
+    dayTs,
+    'prune',
+    'ok',
+    pruneStart,
+    clock.now(),
+    rawRows + runRows + hourlyRows,
+    null,
+  );
+  safeEvent(obs, 'prune', { status: 'ok' }, { rawRows, runRows, hourlyRows });
 }

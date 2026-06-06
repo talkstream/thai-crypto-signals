@@ -108,6 +108,44 @@ describe('rollup', () => {
     const count = await db.prepare('SELECT COUNT(*) AS n FROM rollups_1h').first<{ n: number }>();
     expect(count?.n).toBe(1); // only the one window with data
   });
+
+  it('aggregates only the latest scale when a window mixes scales', async () => {
+    const btc = await seedBtc();
+    const h = hourStart(T) - HOUR;
+    const ins = `INSERT INTO ticker_snapshots
+      (symbol_id, bucket_ts, observed_ms, last_minor, high_minor, low_minor, price_scale_used,
+       base_volume, quote_volume, pct_change_bp, ingested_ms)
+      VALUES (?, ?, ?, ?, ?, ?, ?, '1', '1', 0, ?)`;
+    // older row at scale 2, newer row at scale 4 (a mid-window scale change)
+    await db.prepare(ins).bind(btc, h, h, 10000, 10000, 10000, 2, h).run();
+    await db
+      .prepare(ins)
+      .bind(btc, h + 120_000, h + 120_000, 1000000, 1000000, 1000000, 4, h + 120_000)
+      .run();
+    await rollup({
+      db,
+      obs: new InMemoryObservabilitySink(),
+      clock: new FakeClock(T),
+      maxWindows: 48,
+    });
+    const hourly = await db
+      .prepare(
+        'SELECT open_minor, close_minor, price_scale_used, sample_count FROM rollups_1h WHERE symbol_id = ? AND hour_ts = ?',
+      )
+      .bind(btc, h)
+      .first<{
+        open_minor: number;
+        close_minor: number;
+        price_scale_used: number;
+        sample_count: number;
+      }>();
+    expect(hourly).toMatchObject({
+      open_minor: 1000000,
+      close_minor: 1000000,
+      price_scale_used: 4,
+      sample_count: 1, // the scale-2 row is excluded, not mixed in
+    });
+  });
 });
 
 describe('maintenance', () => {
@@ -163,6 +201,7 @@ describe('maintenance', () => {
       clock: new FakeClock(T),
       retentionDays: 7,
       runsRetentionDays: 30,
+      rollups1hRetentionDays: 90,
     });
 
     expect((await store.loadMap()).has('ETH_THB')).toBe(true); // catalog refreshed
@@ -193,6 +232,7 @@ describe('maintenance', () => {
       clock: new FakeClock(T),
       retentionDays: 7,
       runsRetentionDays: 30,
+      rollups1hRetentionDays: 90,
     });
     const cat = await db
       .prepare("SELECT status FROM collection_runs WHERE kind = 'catalog'")
@@ -202,5 +242,35 @@ describe('maintenance', () => {
       .prepare("SELECT status FROM collection_runs WHERE kind = 'prune'")
       .first<{ status: string }>();
     expect(prune?.status).toBe('ok');
+  });
+
+  it('prunes rollups_1h past retention', async () => {
+    const btc = await seedBtc();
+    const ins = `INSERT INTO rollups_1h
+      (symbol_id, hour_ts, open_minor, high_minor, low_minor, close_minor, price_scale_used, sample_count, finalized)
+      VALUES (?, ?, 1, 1, 1, 1, 2, 1, 1)`;
+    await db
+      .prepare(ins)
+      .bind(btc, T - 100 * DAY)
+      .run(); // older than 90d
+    await db
+      .prepare(ins)
+      .bind(btc, T - HOUR)
+      .run(); // recent
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(Response.json({ error: 0, result: [] })),
+    );
+    await maintenance({
+      db,
+      marketData: adapter(),
+      symbols: new D1SymbolStore(db),
+      obs: new InMemoryObservabilitySink(),
+      clock: new FakeClock(T),
+      retentionDays: 7,
+      runsRetentionDays: 30,
+      rollups1hRetentionDays: 90,
+    });
+    const n = await db.prepare('SELECT COUNT(*) AS n FROM rollups_1h').first<{ n: number }>();
+    expect(n?.n).toBe(1); // old hourly candle pruned, recent kept
   });
 });
