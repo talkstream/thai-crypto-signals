@@ -26,7 +26,7 @@ export interface MarketDataSource {
 
 /** KV write port — never authoritative, never on the idempotency path. */
 export interface CacheWriter {
-  put(key: string, value: string): Promise<void>;
+  put(key: string, value: string, ttlSeconds?: number): Promise<void>;
 }
 
 export type ObsBlobs = Record<string, string>;

@@ -173,6 +173,13 @@ export async function collect(deps: CollectDeps): Promise<void> {
     return;
   }
 
+  // An empty ticker is an upstream anomaly, not a successful tick: record it and keep the
+  // previous cache rather than overwriting it with nothing.
+  if (raw.length === 0) {
+    await reportFailure(deps, base, 'empty', 200, 'empty ticker envelope');
+    return;
+  }
+
   // 5. Per-entry mapping (one bad entry never discards the tick).
   const snapshots: TickerSnapshot[] = [];
   const latest: LatestEntryDto[] = [];
@@ -247,14 +254,18 @@ export async function collect(deps: CollectDeps): Promise<void> {
     await reportFailure(deps, base, 'store_error', null, errMessage(e));
     return;
   }
-  if (overlap) safeEvent(obs, 'overlap', { bucket: String(bucketTs) }, { count: 1 });
-
-  // 7. Best-effort KV hot-cache (non-authoritative).
-  try {
-    const payload: LatestDto = { bucketTs, writtenAtMs: finishedMs, entries: latest };
-    await cache.put(LATEST_KEY, JSON.stringify(payload));
-  } catch {
-    // hot cache is non-authoritative; never fail the tick on a KV write
+  // 7. Best-effort KV hot-cache (non-authoritative). Skip on overlap — D1 kept the first
+  //    writer's snapshots, so caching this (second) fetch would break KV/D1 parity. A TTL
+  //    bounds staleness so a stalled collector can't serve obsolete data indefinitely.
+  if (overlap) {
+    safeEvent(obs, 'overlap', { bucket: String(bucketTs) }, { count: 1 });
+  } else {
+    try {
+      const payload: LatestDto = { bucketTs, writtenAtMs: finishedMs, entries: latest };
+      await cache.put(LATEST_KEY, JSON.stringify(payload), Math.max(60, cadenceMinutes * 60 * 5));
+    } catch {
+      // hot cache is non-authoritative; never fail the tick on a KV write
+    }
   }
 
   // 8. Best-effort run metric.

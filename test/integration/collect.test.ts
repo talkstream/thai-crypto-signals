@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BitkubAdapter } from '../../src/adapters/bitkub/client';
+import { KvCacheWriter } from '../../src/adapters/storage/cache-writer';
 import { D1CollectStore } from '../../src/adapters/storage/collect-store';
 import { D1SymbolStore } from '../../src/adapters/storage/symbol-store';
 import { type CollectDeps, collect } from '../../src/collector/collect';
@@ -23,6 +24,7 @@ const PRIOR_BUCKET = BUCKET - 60_000 * CADENCE;
 
 beforeEach(async () => {
   await resetDb(db);
+  await env.CACHE.delete('latest:v1');
 });
 afterEach(() => {
   vi.restoreAllMocks();
@@ -88,7 +90,7 @@ function makeDeps(over: Partial<CollectDeps> = {}): CollectDeps {
     }),
     symbols: new D1SymbolStore(db),
     store: new D1CollectStore(db),
-    cache: new InMemoryCacheWriter(),
+    cache: new KvCacheWriter(env.CACHE),
     obs: new InMemoryObservabilitySink(),
     clock: new FakeClock(SERVER_MS),
     cadenceMinutes: CADENCE,
@@ -135,13 +137,12 @@ describe('collect — happy path & catalog', () => {
       ticker: () =>
         Response.json([tickerEntry(), tickerEntry({ symbol: 'ETH_THB', last: '70000' })]),
     });
-    const cache = new InMemoryCacheWriter();
     const obs = new InMemoryObservabilitySink();
-    await collect(makeDeps({ cache, obs }));
+    await collect(makeDeps({ obs })); // real KV via KvCacheWriter
 
     expect(await runStatus()).toBe('ok');
     expect(await snapshotCount()).toBe(2);
-    expect(cache.store.has('latest:v1')).toBe(true);
+    expect(await env.CACHE.get('latest:v1')).not.toBeNull();
     expect(obs.runs.length).toBe(1);
   });
 
@@ -293,13 +294,17 @@ describe('collect — per-entry tolerance', () => {
     expect(obs.events.some((e) => e.kind === 'sanity_jump')).toBe(true);
   });
 
-  it('emits an overlap event on a duplicate fire', async () => {
+  it('emits an overlap event and does NOT update KV on a duplicate fire', async () => {
     await seedSymbols();
     routeFetch({ ticker: () => Response.json([tickerEntry()]) });
     await collect(makeDeps());
+    const before = await env.CACHE.get('latest:v1');
+    // duplicate fire for the same bucket, with a different price
+    routeFetch({ ticker: () => Response.json([tickerEntry({ last: '9999999.99' })]) });
     const obs = new InMemoryObservabilitySink();
     await collect(makeDeps({ obs }));
     expect(obs.events.some((e) => e.kind === 'overlap')).toBe(true);
+    expect(await env.CACHE.get('latest:v1')).toBe(before); // KV not overwritten on overlap
   });
 });
 
@@ -350,6 +355,15 @@ describe('collect — fetch failures become terminal run rows', () => {
     });
     await collect(makeDeps());
     expect(await runStatus()).toBe('timeout');
+  });
+
+  it('empty ticker -> empty status, preserving the previous cache', async () => {
+    await seedSymbols();
+    await env.CACHE.put('latest:v1', '{"bucketTs":1,"writtenAtMs":1,"entries":[]}');
+    routeFetch({ ticker: () => Response.json([]) });
+    await collect(makeDeps());
+    expect(await runStatus()).toBe('empty');
+    expect(await env.CACHE.get('latest:v1')).not.toBeNull(); // previous cache untouched
   });
 });
 

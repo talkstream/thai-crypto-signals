@@ -282,4 +282,44 @@ describe('read API on an empty / sparse DB', () => {
     expect(body.interval).toBe('1d');
     expect(body.points[0]?.finalized).toBe(false);
   });
+
+  it('falls back to a D1 rebuild when the cached latest is stale', async () => {
+    const ids = await seedSymbols();
+    const btc = ids.get('BTC_THB');
+    if (btc === undefined) throw new Error('seed');
+    await insertSnap(btc, NOW - 60_000, 200000000, 199000000);
+    await env.CACHE.put(
+      'latest:v1',
+      JSON.stringify({
+        bucketTs: NOW - 100 * FRESH_MS,
+        entries: [
+          { symbol: 'STALE_THB', last: '1', bid: null, ask: null, pctChangeBp: 0, observedMs: 0 },
+        ],
+      }),
+    );
+    const body = (await (await get('/v1/tickers/latest')).json()) as {
+      entries: Array<{ symbol: string }>;
+    };
+    expect(body.entries.map((e) => e.symbol)).toEqual(['BTC_THB']); // rebuilt from D1, not stale cache
+  });
+
+  it('formats each history row at its own stored scale', async () => {
+    const ids = await seedSymbols();
+    const btc = ids.get('BTC_THB');
+    if (btc === undefined) throw new Error('seed');
+    // catalog scale is 2, but this snapshot was stored at scale 4
+    await db
+      .prepare(
+        `INSERT INTO ticker_snapshots
+          (symbol_id, bucket_ts, observed_ms, last_minor, high_minor, low_minor, price_scale_used,
+           base_volume, quote_volume, pct_change_bp, ingested_ms)
+         VALUES (?, ?, ?, 12345, 12345, 12345, 4, '1', '1', 0, ?)`,
+      )
+      .bind(btc, NOW - 60_000, NOW - 60_000, NOW - 60_000)
+      .run();
+    const body = (await (await get('/v1/tickers/BTC_THB?limit=5')).json()) as {
+      points: Array<{ last: string }>;
+    };
+    expect(body.points[0]?.last).toBe('1.2345'); // scale 4, not the catalog's scale 2
+  });
 });

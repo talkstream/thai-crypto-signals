@@ -167,4 +167,13 @@ describe('D1CollectStore', () => {
     expect(row?.status).toBe('fetch_failed');
     expect(row?.error_detail).toBe('boom');
   });
+
+  it('rethrows a non-constraint store error', async () => {
+    const ids = await seed([symbol()]);
+    const btc = ids.get('BTC_THB');
+    if (btc === undefined) throw new Error('seed failed');
+    await db.prepare('DROP TABLE ticker_snapshots').run(); // force a non-UNIQUE failure
+    const store = new D1CollectStore(db);
+    await expect(store.commitCollect([snap(btc)], run())).rejects.toThrow();
+  });
 });

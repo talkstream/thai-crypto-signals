@@ -15,11 +15,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # No Cloudflare credentials here: `wrangler types` is fully local, so verification never
+  # touches deploy secrets. Only the deploy job below holds the token.
   verify:
     runs-on: ubuntu-latest
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

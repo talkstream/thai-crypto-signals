@@ -69,12 +69,23 @@ export function parseSymbols(raw: unknown): CatalogEntry[] {
 
 // --- servertime: bare numeric (string or number) ---
 
-const ServerTime = z.coerce.number().int();
+// Strict: a plausible epoch-ms timestamp only. Rejects null/false/true/'' (which z.coerce
+// would silently turn into 0/1) so a malformed response falls back to the local clock.
+const ServerTime = z.union([
+  z.number().int().gt(1_000_000_000_000),
+  z
+    .string()
+    .regex(/^\d{13,}$/)
+    .transform(Number),
+]);
 
 export function parseServerTime(raw: unknown): number {
   const result = ServerTime.safeParse(raw);
   if (!result.success) {
-    throw new PayloadValidationError('servertime is not numeric', '/api/v3/servertime');
+    throw new PayloadValidationError(
+      'servertime is not a plausible epoch-ms value',
+      '/api/v3/servertime',
+    );
   }
   return result.data;
 }

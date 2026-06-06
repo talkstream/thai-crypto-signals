@@ -51,7 +51,7 @@ export class InMemoryObservabilitySink implements ObservabilitySink {
 export class InMemoryCacheWriter implements CacheWriter {
   readonly store = new Map<string, string>();
   throwOnPut = false;
-  async put(key: string, value: string): Promise<void> {
+  async put(key: string, value: string, _ttlSeconds?: number): Promise<void> {
     if (this.throwOnPut) throw new Error('KV unavailable');
     this.store.set(key, value);
   }

@@ -61,13 +61,12 @@ export interface ReadStore {
 export class D1ReadStore implements ReadStore {
   constructor(private readonly db: D1Database) {}
 
-  private async symbolId(symbol: string): Promise<{ id: number; scale: number }> {
+  private async assertSymbolExists(symbol: string): Promise<void> {
     const row = await this.db
-      .prepare('SELECT id, price_scale FROM symbols WHERE symbol = ?')
+      .prepare('SELECT 1 AS x FROM symbols WHERE symbol = ?')
       .bind(symbol)
-      .first<{ id: number; price_scale: number }>();
+      .first<{ x: number }>();
     if (!row) throw new SymbolNotInCatalogError(symbol);
-    return { id: row.id, scale: row.price_scale };
   }
 
   async health(nowMs: number, freshMs: number): Promise<HealthDto> {
@@ -162,10 +161,11 @@ export class D1ReadStore implements ReadStore {
   }
 
   async history(symbol: string, fromMs: number, toMs: number, limit: number): Promise<HistoryDto> {
-    const { scale } = await this.symbolId(symbol);
+    await this.assertSymbolExists(symbol);
     const { results } = await this.db
       .prepare(
-        `SELECT t.bucket_ts, t.observed_ms, t.last_minor, t.bid_minor, t.ask_minor, t.pct_change_bp
+        `SELECT t.bucket_ts, t.observed_ms, t.last_minor, t.bid_minor, t.ask_minor,
+                t.price_scale_used, t.pct_change_bp
          FROM ticker_snapshots t JOIN symbols s ON s.id = t.symbol_id
          WHERE s.symbol = ? AND t.bucket_ts >= ? AND t.bucket_ts <= ?
          ORDER BY t.bucket_ts DESC LIMIT ?`,
@@ -177,21 +177,26 @@ export class D1ReadStore implements ReadStore {
         last_minor: number;
         bid_minor: number | null;
         ask_minor: number | null;
+        price_scale_used: number;
         pct_change_bp: number;
       }>();
+    // Format each row with the scale it was stored at (self-describing), not the current
+    // catalog scale — so a later exchange scale change never shifts old prices.
     const points = results.map((r) => ({
       bucketTs: r.bucket_ts,
       observedMs: r.observed_ms,
-      last: formatMinorToDecimal(BigInt(r.last_minor), scale),
-      bid: r.bid_minor === null ? null : formatMinorToDecimal(BigInt(r.bid_minor), scale),
-      ask: r.ask_minor === null ? null : formatMinorToDecimal(BigInt(r.ask_minor), scale),
+      last: formatMinorToDecimal(BigInt(r.last_minor), r.price_scale_used),
+      bid:
+        r.bid_minor === null ? null : formatMinorToDecimal(BigInt(r.bid_minor), r.price_scale_used),
+      ask:
+        r.ask_minor === null ? null : formatMinorToDecimal(BigInt(r.ask_minor), r.price_scale_used),
       pctChangeBp: r.pct_change_bp,
     }));
     return { symbol, points };
   }
 
   async rollups(symbol: string, interval: '1h' | '1d', limit: number): Promise<RollupsDto> {
-    await this.symbolId(symbol);
+    await this.assertSymbolExists(symbol);
     const table = interval === '1h' ? 'rollups_1h' : 'rollups_1d';
     const tsCol = interval === '1h' ? 'hour_ts' : 'day_ts';
     const { results } = await this.db

@@ -39,7 +39,12 @@ async function latest(deps: ApiDeps): Promise<Response> {
   const cached = await deps.cache.get(LATEST_KEY);
   if (cached !== null) {
     try {
-      return jsonRaw(serializeLatest(JSON.parse(cached) as LatestDto));
+      const dto = JSON.parse(cached) as LatestDto;
+      // Serve the hot cache only while it is fresh; a stalled collector must not serve
+      // obsolete data indefinitely. Fresh hit == D1 rebuild (same collect wrote both).
+      if (deps.clock.now() - dto.bucketTs <= deps.freshMs) {
+        return jsonRaw(serializeLatest(dto));
+      }
     } catch {
       // corrupt cache value — treat as a miss and rebuild from D1
     }

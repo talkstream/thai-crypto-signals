@@ -67,12 +67,14 @@ describe('symbols (recorded real payload)', () => {
 });
 
 describe('servertime', () => {
-  it('coerces a numeric string to an int', () => {
+  it('accepts a plausible epoch-ms (number or 13+ digit string)', () => {
     expect(parseServerTime('1780745575377')).toBe(1780745575377);
     expect(parseServerTime(1780745575377)).toBe(1780745575377);
   });
 
-  it('throws on a non-numeric body', () => {
-    expect(() => parseServerTime('not-a-number')).toThrow(PayloadValidationError);
+  it('rejects implausible / malformed values without silent coercion', () => {
+    for (const bad of ['not-a-number', true, false, null, 0, '123', '']) {
+      expect(() => parseServerTime(bad)).toThrow(PayloadValidationError);
+    }
   });
 });

@@ -67,9 +67,9 @@ describe('BitkubAdapter error handling', () => {
     let n = 0;
     const spy = mockFetch(() => {
       n += 1;
-      return n === 1 ? new Response('boom', { status: 503 }) : Response.json(1);
+      return n === 1 ? new Response('boom', { status: 503 }) : Response.json(1780745575377);
     });
-    expect(await adapter().getServerTime()).toBe(1);
+    expect(await adapter().getServerTime()).toBe(1780745575377);
     expect(spy).toHaveBeenCalledTimes(2);
   });
 
@@ -90,9 +90,9 @@ describe('BitkubAdapter error handling', () => {
     const spy = mockFetch(() => {
       n += 1;
       if (n === 1) throw new TypeError('network down');
-      return Response.json(1);
+      return Response.json(1780745575377);
     });
-    expect(await adapter().getServerTime()).toBe(1);
+    expect(await adapter().getServerTime()).toBe(1780745575377);
     expect(spy).toHaveBeenCalledTimes(2);
   });
 

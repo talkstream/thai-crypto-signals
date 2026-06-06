@@ -11,3 +11,8 @@ export const minorFromDb = (value: number): bigint => BigInt(value);
 
 export const minorFromDbNullable = (value: number | null): bigint | null =>
   value === null ? null : BigInt(value);
+
+/** True for a D1/SQLite UNIQUE/PK constraint violation — used to detect a duplicate bucket. */
+export function isUniqueConstraintError(e: unknown): boolean {
+  return e instanceof Error && /UNIQUE constraint failed/i.test(e.message);
+}
