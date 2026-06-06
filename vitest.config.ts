@@ -11,13 +11,14 @@ export default defineConfig({
       provider: 'istanbul',
       reporter: ['text', 'text-summary'],
       include: ['src/**/*.ts'],
-      // EXACTLY these four exclusions (CI-guarded in Phase 10).
+      // EXACTLY these four exclusions (CI-guarded by scripts/guard-coverage-exclude.mjs).
       exclude: [
         'src/adapters/bitkub/cassettes/**',
         'src/spike/**',
         'worker-configuration.d.ts',
         'test/**',
       ],
+      thresholds: { statements: 100, branches: 100, functions: 100, lines: 100 },
     },
   },
 });

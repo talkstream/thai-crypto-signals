@@ -25,9 +25,7 @@ const jsonRaw = (serialized: string): Response =>
 
 // Canonical serialization so a KV hit and a D1 rebuild are byte-identical (sorted, no writtenAtMs).
 function serializeLatest(dto: LatestDto): string {
-  const entries = [...dto.entries].sort((a, b) =>
-    a.symbol < b.symbol ? -1 : a.symbol > b.symbol ? 1 : 0,
-  );
+  const entries = [...dto.entries].sort((a, b) => a.symbol.localeCompare(b.symbol));
   return JSON.stringify({ bucketTs: dto.bucketTs, entries });
 }
 

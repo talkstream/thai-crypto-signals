@@ -18,7 +18,7 @@ export interface AckableMessage {
  * DARK consumer: validates each message and acks it (valid or invalid) — ack-and-drop, zero
  * delivery. Invalid bodies are surfaced via observability. Phase 2 will add real delivery.
  */
-export function consumeSignals(messages: AckableMessage[], obs: ObservabilitySink): void {
+export function consumeSignals(messages: readonly AckableMessage[], obs: ObservabilitySink): void {
   for (const message of messages) {
     if (!SignalJobSchema.safeParse(message.body).success) {
       safeEvent(obs, 'signal_invalid', {}, { count: 1 });

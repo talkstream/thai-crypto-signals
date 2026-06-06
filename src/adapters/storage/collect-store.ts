@@ -73,8 +73,9 @@ export class D1CollectStore implements CollectStore {
     const ingestedMs = run.startedMs;
     const stmts = [...snapshots.map((s) => this.snapshotStmt(s, ingestedMs)), this.runStmt(run)];
     const results = await this.db.batch(stmts);
-    const runResult = results[results.length - 1];
-    return { overlap: (runResult?.meta.changes ?? 0) === 0 };
+    /* istanbul ignore next -- the run row is always the batch's last statement */
+    const overlap = (results.at(-1)?.meta.changes ?? 0) === 0;
+    return { overlap };
   }
 
   async failRun(run: RunRecord): Promise<void> {

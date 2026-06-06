@@ -75,8 +75,8 @@ export async function maintenance(deps: MaintenanceDeps): Promise<void> {
     .prepare('DELETE FROM collection_runs WHERE started_ms < ? AND kind = ?')
     .bind(runsCutoff, 'collect')
     .run();
-  const rawRows = rawRes.meta.changes ?? 0;
-  const runRows = runsRes.meta.changes ?? 0;
+  const rawRows = rawRes.meta.changes;
+  const runRows = runsRes.meta.changes;
   await recordRun(db, dayTs, 'prune', 'ok', pruneStart, clock.now(), rawRows + runRows, null);
   safeEvent(obs, 'prune', { status: 'ok' }, { rawRows, runRows });
 }

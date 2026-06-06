@@ -224,3 +224,62 @@ describe('routing edges', () => {
     expect(((await res.json()) as { error: string }).error).toBe('internal_error');
   });
 });
+
+describe('read API on an empty / sparse DB', () => {
+  it('health reports not-ok with null fields', async () => {
+    const body = (await (await get('/health')).json()) as {
+      ok: boolean;
+      lastCollectStatus: string | null;
+      lastObservedMs: number | null;
+      symbolCount: number;
+    };
+    expect(body.ok).toBe(false);
+    expect(body.lastCollectStatus).toBeNull();
+    expect(body.lastObservedMs).toBeNull();
+    expect(body.symbolCount).toBe(0);
+  });
+
+  it('latest is empty with bucketTs 0', async () => {
+    const body = JSON.parse(await (await get('/v1/tickers/latest')).text()) as {
+      bucketTs: number;
+      entries: unknown[];
+    };
+    expect(body.bucketTs).toBe(0);
+    expect(body.entries).toEqual([]);
+  });
+
+  it('formats a null bid/ask in history', async () => {
+    const ids = await seedSymbols();
+    const btc = ids.get('BTC_THB');
+    if (btc === undefined) throw new Error('seed');
+    await insertSnap(btc, NOW - 60_000, 200000000, null);
+    const body = (await (await get('/v1/tickers/BTC_THB?limit=5')).json()) as {
+      points: Array<{ bid: string | null }>;
+    };
+    expect(body.points[0]?.bid).toBeNull();
+  });
+
+  it('clamps a non-numeric limit to the default', async () => {
+    await seedSymbols();
+    expect((await get('/v1/tickers/BTC_THB?limit=abc')).status).toBe(200);
+  });
+
+  it('returns daily rollups (interval=1d)', async () => {
+    const ids = await seedSymbols();
+    const btc = ids.get('BTC_THB');
+    if (btc === undefined) throw new Error('seed');
+    await db
+      .prepare(
+        `INSERT INTO rollups_1d (symbol_id, day_ts, open_minor, high_minor, low_minor, close_minor, price_scale_used, sample_count, finalized)
+         VALUES (?, ?, 100, 300, 100, 200, 2, 5, 0)`,
+      )
+      .bind(btc, NOW - 86_400_000)
+      .run();
+    const body = (await (await get('/v1/tickers/BTC_THB/rollups?interval=1d&limit=5')).json()) as {
+      interval: string;
+      points: Array<{ finalized: boolean }>;
+    };
+    expect(body.interval).toBe('1d');
+    expect(body.points[0]?.finalized).toBe(false);
+  });
+});

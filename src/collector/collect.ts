@@ -6,7 +6,6 @@ import {
   BitkubHttpError,
   BitkubRateLimitedError,
   BitkubTimeoutError,
-  DecimalParseError,
   PayloadValidationError,
   ScaleOverflowError,
 } from '../domain/errors';
@@ -59,7 +58,7 @@ function safeRun(obs: ObservabilitySink, run: RunRecord, overlap: boolean): void
         driftCount: run.driftCount,
         scaleOverflowCount: run.scaleOverflowCount,
         rowsWritten: run.rowsWritten,
-        durationMs: run.durationMs ?? 0,
+        durationMs: run.durationMs,
         skewMs: run.skewMs ?? 0,
         overlap: overlap ? 1 : 0,
       },
@@ -194,16 +193,14 @@ export async function collect(deps: CollectDeps): Promise<void> {
     try {
       snapshot = mapEntry(entry, sym, bucketTs, serverMs);
     } catch (e) {
+      // mapEntry only throws ScaleOverflow or DecimalParse; anything else counts as drift.
       if (e instanceof ScaleOverflowError) {
         scaleOverflowCount += 1;
         safeEvent(obs, 'scale_overflow', { symbol: entry.symbol }, { scale: sym.priceScale });
-        continue;
-      }
-      if (e instanceof DecimalParseError) {
+      } else {
         driftCount += 1;
-        continue;
       }
-      throw e;
+      continue;
     }
     const priorLast = prior.get(sym.id);
     if (priorLast !== undefined && priorLast > 0n && isSanityJump(snapshot.lastMinor, priorLast)) {

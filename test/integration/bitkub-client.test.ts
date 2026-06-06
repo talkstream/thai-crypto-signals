@@ -125,4 +125,15 @@ describe('BitkubAdapter error handling', () => {
     await expect(adapter().getTicker()).rejects.toBeInstanceOf(PayloadValidationError);
     expect(spy).toHaveBeenCalledTimes(1);
   });
+
+  it('maps a DOMException AbortError to BitkubTimeoutError', async () => {
+    mockFetch(() => {
+      throw new DOMException('aborted', 'AbortError');
+    });
+    const err = await adapter()
+      .getServerTime()
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(BitkubTimeoutError);
+    expect((err as BitkubTimeoutError).observedName).toBe('AbortError');
+  });
 });

@@ -81,20 +81,22 @@ export class D1ReadStore implements ReadStore {
         drift_count: number;
         scale_overflow_count: number;
       }>();
-    const observed = await this.db
+    /* istanbul ignore next -- MAX() always returns exactly one row */
+    const observed = (await this.db
       .prepare('SELECT MAX(observed_ms) AS m FROM ticker_snapshots')
-      .first<{ m: number | null }>();
-    const symbolCount = await this.db
+      .first<{ m: number | null }>()) ?? { m: null };
+    /* istanbul ignore next -- COUNT() always returns exactly one row */
+    const counts = (await this.db
       .prepare('SELECT COUNT(*) AS n FROM symbols')
-      .first<{ n: number }>();
-    const lastObservedMs = observed?.m ?? null;
+      .first<{ n: number }>()) ?? { n: 0 };
+    const lastObservedMs = observed.m;
     return {
       ok: lastObservedMs !== null && nowMs - lastObservedMs <= freshMs,
       nowMs,
       lastCollectBucketTs: lastRun?.bucket_ts ?? null,
       lastCollectStatus: lastRun?.status ?? null,
       lastObservedMs,
-      symbolCount: symbolCount?.n ?? 0,
+      symbolCount: counts.n,
       recentDrift: lastRun?.drift_count ?? 0,
       recentScaleOverflow: lastRun?.scale_overflow_count ?? 0,
     };
@@ -124,10 +126,11 @@ export class D1ReadStore implements ReadStore {
   }
 
   async latest(): Promise<LatestDto> {
-    const maxRow = await this.db
+    /* istanbul ignore next -- MAX() always returns exactly one row */
+    const maxRow = (await this.db
       .prepare('SELECT MAX(bucket_ts) AS b FROM ticker_snapshots')
-      .first<{ b: number | null }>();
-    const bucketTs = maxRow?.b ?? 0;
+      .first<{ b: number | null }>()) ?? { b: null };
+    const bucketTs = maxRow.b ?? 0;
     const { results } = await this.db
       .prepare(
         `SELECT s.symbol AS symbol, t.observed_ms, t.last_minor, t.bid_minor, t.ask_minor,

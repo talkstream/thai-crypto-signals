@@ -187,6 +187,18 @@ describe('collect — per-entry tolerance', () => {
     expect(row?.drift_count).toBe(2);
   });
 
+  it('counts a non-numeric price string as drift (mapEntry DecimalParse)', async () => {
+    await seedSymbols();
+    routeFetch({ ticker: () => Response.json([tickerEntry({ last: 'abc' })]) });
+    await collect(makeDeps());
+    expect(await runStatus()).toBe('drift');
+    const row = await db
+      .prepare('SELECT drift_count FROM collection_runs WHERE kind = ?')
+      .bind('collect')
+      .first<{ drift_count: number }>();
+    expect(row?.drift_count).toBe(1);
+  });
+
   it('skips a scale-overflow entry and emits an AE event', async () => {
     await seedSymbols([
       symbolEntry({ symbol: 'BABYDOGE_THB', base_asset: 'BABYDOGE', price_scale: 13 }),
@@ -262,6 +274,25 @@ describe('collect — per-entry tolerance', () => {
     expect(obs.events.some((e) => e.kind === 'sanity_jump')).toBe(true);
   });
 
+  it('emits a sanity_jump on a >=10x DOWNWARD move', async () => {
+    await seedSymbols();
+    const btc = (await new D1SymbolStore(db).loadMap()).get('BTC_THB');
+    if (!btc) throw new Error('seed');
+    await db
+      .prepare(
+        `INSERT INTO ticker_snapshots
+          (symbol_id, bucket_ts, observed_ms, last_minor, high_minor, low_minor, price_scale_used,
+           base_volume, quote_volume, pct_change_bp, ingested_ms)
+         VALUES (?, ?, ?, 201705088, 201705088, 201705088, 2, '1', '1', 0, ?)`,
+      )
+      .bind(btc.id, PRIOR_BUCKET, PRIOR_BUCKET, PRIOR_BUCKET)
+      .run();
+    routeFetch({ ticker: () => Response.json([tickerEntry({ last: '100.00' })]) });
+    const obs = new InMemoryObservabilitySink();
+    await collect(makeDeps({ obs }));
+    expect(obs.events.some((e) => e.kind === 'sanity_jump')).toBe(true);
+  });
+
   it('emits an overlap event on a duplicate fire', async () => {
     await seedSymbols();
     routeFetch({ ticker: () => Response.json([tickerEntry()]) });
@@ -297,6 +328,28 @@ describe('collect — fetch failures become terminal run rows', () => {
     routeFetch({ ticker: () => Response.json({ error: 3 }) });
     await collect(makeDeps());
     expect(await runStatus()).toBe('drift');
+  });
+
+  it('network-unreachable -> fetch_failed', async () => {
+    await seedSymbols();
+    routeFetch({
+      ticker: () => {
+        throw new TypeError('network down');
+      },
+    });
+    await collect(makeDeps());
+    expect(await runStatus()).toBe('fetch_failed');
+  });
+
+  it('timeout -> timeout', async () => {
+    await seedSymbols();
+    routeFetch({
+      ticker: () => {
+        throw new DOMException('timed out', 'TimeoutError');
+      },
+    });
+    await collect(makeDeps());
+    expect(await runStatus()).toBe('timeout');
   });
 });
 

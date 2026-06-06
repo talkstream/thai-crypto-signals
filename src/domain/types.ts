@@ -59,6 +59,6 @@ export interface RunRecord {
   rowsWritten: number;
   skewMs: number | null;
   httpStatus: number | null;
-  durationMs: number | null;
+  durationMs: number;
   errorDetail: string | null;
 }
