@@ -19,7 +19,12 @@ export interface LatestDto {
   entries: LatestEntryDto[];
 }
 
-export function toLatestEntry(symbol: string, s: TickerSnapshot): LatestEntryDto {
+type LatestSource = Pick<
+  TickerSnapshot,
+  'lastMinor' | 'bidMinor' | 'askMinor' | 'priceScaleUsed' | 'pctChangeBp' | 'observedMs'
+>;
+
+export function toLatestEntry(symbol: string, s: LatestSource): LatestEntryDto {
   return {
     symbol,
     last: formatMinorToDecimal(s.lastMinor, s.priceScaleUsed),
