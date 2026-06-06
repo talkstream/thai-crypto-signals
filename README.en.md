@@ -146,8 +146,9 @@ pnpm exec wrangler d1 migrations apply thai-crypto-signals --local   # create lo
 pnpm test:coverage                                                   # run the test suite
 ```
 
-The test suite spins up a **real local D1 database, KV, and queue** — nothing about the storage is
-faked. The only stubbed boundary is the single outbound call to Bitkub. That is what "testing
+The test suite spins up a **real local D1 database and KV** — the storage is not faked. The only
+stubbed boundary is the outbound call to Bitkub (recorded responses); the queue producer uses a
+fake, since the local test runtime has no producer-side queue API. That is what "testing
 against real infrastructure" means, and why the suite catches real bugs.
 
 Now start the Worker locally and trigger one collect tick by hand:
@@ -178,7 +179,8 @@ curl http://localhost:8787/v1/tickers/latest
 
 `ok: true` with `symbolCount` above 0 means it worked. `symbolCount: 0` almost always means the
 `/__scheduled` step was skipped — the database stays empty until a collect tick runs. (`partial`
-and a small `recentDrift` are normal: a few markets are one-sided or unlisted and get skipped.)
+and a small `recentDrift` are normal: a few entries are malformed or not in the catalogue and get
+skipped; one-sided markets are kept, with a null bid or ask.)
 
 *Note:* local dev makes a **real** request to Bitkub from your machine, so trigger it sparingly.
 
@@ -206,9 +208,9 @@ the local checkpoint. Give the `*/2` cron one tick (≈2 minutes) to populate da
 usually means migrations were not applied with `--remote`, or a binding id in `wrangler.jsonc` is
 still the original rather than yours.
 
-**Cost.** Cron triggers, D1, and KV fit comfortably in Cloudflare's **free** tier for this workload.
-**Queues require the Workers Paid plan** — and queues are only used by the disabled signals scaffold,
-so to stay on the free tier, delete the `queues` block from `wrangler.jsonc` before deploying.
+**Cost.** This whole project fits Cloudflare's **free** tier: cron triggers, D1, KV, and — since
+February 2026 — Queues (10,000 operations/day) are all included. No paid plan is needed for this
+workload.
 
 **Cleanup (so you do not leave resources running)**
 
@@ -217,6 +219,7 @@ pnpm exec wrangler delete                             # the Worker
 pnpm exec wrangler d1 delete my-crypto-db
 pnpm exec wrangler kv namespace delete --namespace-id <id>
 pnpm exec wrangler queues delete my-signals
+pnpm exec wrangler queues delete my-signals-dlq
 ```
 
 ---
@@ -245,9 +248,10 @@ Make the ideas your own. Each lists a difficulty and a hint.
    only stubbed boundary is `globalThis.fetch`; see `test/integration/collect.test.ts` for the
    pattern.
 4. **(Advanced)** Light up the disabled **signals** scaffold and send one Telegram message when a
-   price moves more than X%. *Hint:* `src/signals/` is wired but delivery is off via the
-   `SIGNALS_ENABLED` flag (a `var` in `wrangler.jsonc`; secrets go in with
-   `pnpm exec wrangler secret put …`). Keep it respectful and rate-limited.
+   price moves more than X%. *Hint:* `src/signals/` exists but is not yet wired into the collect
+   path, and nothing reads `SIGNALS_ENABLED` yet — wiring the producer in (and gating it on that
+   flag) is the exercise. Secrets go in with `pnpm exec wrangler secret put …`. Keep it respectful
+   and rate-limited.
 
 ---
 
