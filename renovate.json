@@ -1,0 +1,12 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits", "schedule:weekly"],
+  "lockFileMaintenance": { "enabled": true },
+  "packageRules": [
+    {
+      "description": "Pin the tsgo native preview build explicitly; review each bump.",
+      "matchPackageNames": ["@typescript/native-preview"],
+      "rangeStrategy": "pin"
+    }
+  ]
+}

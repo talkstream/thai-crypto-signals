@@ -1,0 +1,52 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "thai-crypto-signals",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-01",
+  "observability": { "enabled": true },
+
+  // Collect cadence MUST be a 60-divisor and MUST match COLLECT_CADENCE_MINUTES
+  // (guard enforced in code + CI). "*/2" == cronExprFor(2).
+  "triggers": {
+    "crons": ["*/2 * * * *", "17 * * * *", "7 3 * * *"]
+  },
+
+  "vars": {
+    "BITKUB_BASE_URL": "https://api.bitkub.com",
+    "COLLECT_CADENCE_MINUTES": "2",
+    "RAW_RETENTION_DAYS": "7",
+    "TICKER_TIMEOUT_MS": "8000",
+    "SYMBOL_MAP_TTL_MS": "600000",
+    "ROLLUP_MAX_WINDOWS": "48",
+    "SIGNALS_ENABLED": "false"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "thai-crypto-signals",
+      "database_id": "cffff15e-3f08-41f3-a4c5-da1191a47ceb",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  "kv_namespaces": [{ "binding": "CACHE", "id": "d05dffeaaf694e43899834d885dbd897" }],
+
+  "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "tcs_metrics" }],
+
+  // DARK signals scaffold: producer + consumer + DLQ are wired so phase 2 grafts
+  // without rework. Delivery is cut at the flag-gated producer (SIGNALS_ENABLED=false),
+  // so .send is never called and the queue stays provably unfed in production.
+  "queues": {
+    "producers": [{ "binding": "SIGNALS_QUEUE", "queue": "tcs-signals" }],
+    "consumers": [
+      {
+        "queue": "tcs-signals",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "tcs-signals-dlq"
+      }
+    ]
+  }
+}

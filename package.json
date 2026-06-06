@@ -1,0 +1,56 @@
+{
+  "name": "thai-crypto-signals",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "Stable, fast collector of Bitkub crypto rates on Cloudflare Workers, architected for signals/notifications.",
+  "homepage": "https://github.com/talkstream/thai-crypto-signals",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talkstream/thai-crypto-signals.git"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.33.2",
+  "scripts": {
+    "typecheck": "tsgo --noEmit",
+    "typecheck:tsc": "tsc --noEmit",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "cf-typegen": "wrangler types",
+    "deploy": "wrangler deploy",
+    "guard:clock": "node scripts/guard-no-wallclock.mjs",
+    "guard:coverage-exclude": "node scripts/guard-coverage-exclude.mjs",
+    "guard": "pnpm guard:clock && pnpm guard:coverage-exclude",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "zod": "4.4.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "workerd",
+      "esbuild"
+    ]
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.16",
+    "@cloudflare/vitest-pool-workers": "0.16.13",
+    "@commitlint/cli": "21.0.2",
+    "@commitlint/config-conventional": "21.0.2",
+    "@typescript/native-preview": "7.0.0-dev.20260606.1",
+    "@vitest/coverage-istanbul": "4.1.8",
+    "fast-check": "4.8.0",
+    "husky": "9.1.7",
+    "typescript": "6.0.3",
+    "vitest": "4.1.8",
+    "wrangler": "4.98.0"
+  }
+}

@@ -1,0 +1,6 @@
+# Local-only secrets/overrides for `wrangler dev`. Copy to `.dev.vars` (git-ignored).
+# Public market-data collection needs NO credentials — this file exists only for
+# phase-2 signal delivery (e.g. a Telegram bot token) and is intentionally empty for MVP.
+#
+# Example (phase 2, do NOT commit real values):
+# TELEGRAM_BOT_TOKEN=

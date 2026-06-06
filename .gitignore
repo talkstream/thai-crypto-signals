@@ -1,0 +1,11 @@
+node_modules/
+.claude/
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+coverage/
+dist/
+worker-configuration.d.ts
+.DS_Store
+*.log
