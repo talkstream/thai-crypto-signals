@@ -10,13 +10,12 @@ import {
   PayloadValidationError,
   ScaleOverflowError,
 } from '../domain/errors';
+import { errMessage, safeEvent } from '../domain/obs';
 import type {
   CacheWriter,
   Clock,
   CollectStore,
   MarketDataSource,
-  ObsBlobs,
-  ObsDoubles,
   ObservabilitySink,
   SymbolStore,
 } from '../domain/ports';
@@ -47,21 +46,6 @@ function httpStatusOf(e: unknown): number | null {
   if (e instanceof BitkubHttpError) return e.status;
   if (e instanceof BitkubRateLimitedError) return 429;
   return null;
-}
-
-const errMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e));
-
-function safeEvent(
-  obs: ObservabilitySink,
-  kind: string,
-  blobs: ObsBlobs,
-  doubles: ObsDoubles,
-): void {
-  try {
-    obs.writeEvent(kind, blobs, doubles);
-  } catch {
-    // Analytics Engine is best-effort; never fail the tick on a metric write.
-  }
 }
 
 function safeRun(obs: ObservabilitySink, run: RunRecord, overlap: boolean): void {
