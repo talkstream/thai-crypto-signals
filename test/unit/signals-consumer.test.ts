@@ -1,32 +1,163 @@
 import { describe, expect, it } from 'vitest';
-import { consumeSignals } from '../../src/signals/consumer';
+import { type AckableMessage, clampDelay, consumeSignals } from '../../src/signals/consumer';
+import type { DeliveryResult, Notifier } from '../../src/signals/notifier';
 import { InMemoryObservabilitySink } from '../helpers/fakes';
 
-// The signals CONSUMER is live production wiring (the worker's queue() handler calls it), so it is
-// covered for real — no mock, no cast: AckableMessage is a plain interface, so the test builds plain
-// objects. (The producer side is dormant phase-2 and excluded from coverage; see vitest.config.ts.)
-describe('consumeSignals (live queue consumer — ack-and-drop, zero delivery)', () => {
-  it('acks every message and flags only invalid bodies', () => {
+// The consumer is live production wiring (the worker's queue() handler calls it). No mock, no cast:
+// AckableMessage and Notifier are plain interfaces, so the test builds plain objects. Notifier stubs
+// return a fixed DeliveryResult (DI, not vi.mock) so we drive the ack/retry decision deterministically.
+const RESULT: DeliveryResult = {
+  delivered: 0,
+  skipped: 0,
+  permanentFailures: 0,
+  transientFailures: 0,
+};
+const notifierReturning = (over: Partial<DeliveryResult>): Notifier => ({
+  deliver: async () => ({ ...RESULT, ...over }),
+});
+const throwingNotifier: Notifier = {
+  deliver: async () => {
+    throw new Error('deliver blew up');
+  },
+};
+
+const VALID = { bucketTs: 1, symbols: ['BTC_THB'], producedAt: 2, schemaVersion: 1 };
+
+interface Recorder {
+  message: AckableMessage;
+  acked: number;
+  retried: number;
+  retryOpts: Array<{ delaySeconds?: number } | undefined>;
+}
+function recorder(body: unknown, attempts = 1): Recorder {
+  const rec: Recorder = { acked: 0, retried: 0, retryOpts: [], message: {} as AckableMessage };
+  rec.message = {
+    body,
+    attempts,
+    ack: () => {
+      rec.acked += 1;
+    },
+    retry: (o?: { delaySeconds?: number }) => {
+      rec.retried += 1;
+      rec.retryOpts.push(o);
+    },
+  };
+  return rec;
+}
+
+describe('consumeSignals (deliver -> ack/retry)', () => {
+  it('acks and emits signal_delivered when there are no transient failures', async () => {
     const obs = new InMemoryObservabilitySink();
-    let acked = 0;
-    const ack = () => {
-      acked += 1;
-    };
-    consumeSignals(
-      [
-        { body: { bucketTs: 1, symbols: ['BTC_THB'], producedAt: 2, schemaVersion: 1 }, ack }, // valid
-        { body: { not: 'a job' }, ack }, // invalid -> surfaced
-      ],
+    const m = recorder(VALID);
+    await consumeSignals([m.message], notifierReturning({ delivered: 1 }), obs);
+
+    expect(m.acked).toBe(1);
+    expect(m.retried).toBe(0);
+    expect(obs.events.some((e) => e.kind === 'signal_delivered')).toBe(true);
+  });
+
+  it('retries (no ack) with the clamped delay when a channel is transiently failing', async () => {
+    const obs = new InMemoryObservabilitySink();
+    const m = recorder(VALID);
+    await consumeSignals(
+      [m.message],
+      notifierReturning({ transientFailures: 1, retryAfterSec: 30 }),
       obs,
     );
 
-    expect(acked).toBe(2); // every message is acked, valid or not
-    expect(obs.events.filter((e) => e.kind === 'signal_invalid').length).toBe(1); // only the invalid one
+    expect(m.acked).toBe(0);
+    expect(m.retried).toBe(1);
+    expect(m.retryOpts[0]).toEqual({ delaySeconds: 30 });
+    expect(obs.events.some((e) => e.kind === 'signal_retry')).toBe(true);
   });
 
-  it('does nothing on an empty batch', () => {
+  it('retries with NO options (platform default) when no retry hint is given', async () => {
     const obs = new InMemoryObservabilitySink();
-    consumeSignals([], obs);
+    const m = recorder(VALID);
+    await consumeSignals([m.message], notifierReturning({ transientFailures: 1 }), obs);
+
+    expect(m.retried).toBe(1);
+    expect(m.retryOpts[0]).toBeUndefined();
+  });
+
+  it('acks and flags an invalid body without ever calling the notifier', async () => {
+    const obs = new InMemoryObservabilitySink();
+    const m = recorder({ not: 'a job' });
+    let delivered = false;
+    await consumeSignals(
+      [m.message],
+      {
+        deliver: async () => {
+          delivered = true;
+          return RESULT;
+        },
+      },
+      obs,
+    );
+
+    expect(m.acked).toBe(1);
+    expect(m.retried).toBe(0);
+    expect(delivered).toBe(false);
+    expect(obs.events.filter((e) => e.kind === 'signal_invalid').length).toBe(1);
+  });
+
+  it('acks (drops) an oversized job rather than 4xx-looping a channel', async () => {
+    const obs = new InMemoryObservabilitySink();
+    const huge = { ...VALID, symbols: Array.from({ length: 2001 }, (_, i) => `S${i}_THB`) };
+    const m = recorder(huge);
+    await consumeSignals([m.message], notifierReturning({ delivered: 1 }), obs);
+
+    expect(m.acked).toBe(1);
+    expect(obs.events.some((e) => e.kind === 'signal_invalid')).toBe(true);
+  });
+
+  it('retries (does NOT drop) when deliver throws unexpectedly', async () => {
+    const obs = new InMemoryObservabilitySink();
+    const m = recorder(VALID);
+    await consumeSignals([m.message], throwingNotifier, obs);
+
+    expect(m.acked).toBe(0);
+    expect(m.retried).toBe(1);
+    expect(obs.events.some((e) => e.kind === 'signal_consumer_error')).toBe(true);
+  });
+
+  it('routes each message in a mixed batch independently', async () => {
+    const obs = new InMemoryObservabilitySink();
+    const good = recorder(VALID);
+    const bad = recorder({ junk: true });
+    // one notifier instance is fine; the routing is decided per message before deliver()
+    await consumeSignals([good.message, bad.message], notifierReturning({ delivered: 1 }), obs);
+
+    expect(good.acked).toBe(1);
+    expect(good.retried).toBe(0);
+    expect(bad.acked).toBe(1);
+    expect(obs.events.filter((e) => e.kind === 'signal_invalid').length).toBe(1);
+    expect(obs.events.filter((e) => e.kind === 'signal_delivered').length).toBe(1);
+  });
+
+  it('does nothing on an empty batch', async () => {
+    const obs = new InMemoryObservabilitySink();
+    await consumeSignals([], notifierReturning({ delivered: 1 }), obs);
     expect(obs.events.length).toBe(0);
+  });
+
+  it('defaults attempts to 0 when the message has no attempts field', async () => {
+    const obs = new InMemoryObservabilitySink();
+    const message: AckableMessage = { body: { bad: true }, ack: () => {}, retry: () => {} };
+    await consumeSignals([message], notifierReturning({ delivered: 1 }), obs);
+    expect(obs.events.find((e) => e.kind === 'signal_invalid')?.doubles.attempts).toBe(0);
+  });
+});
+
+describe('clampDelay', () => {
+  it('returns undefined for undefined or non-finite hints', () => {
+    expect(clampDelay(undefined)).toBeUndefined();
+    expect(clampDelay(Number.NaN)).toBeUndefined();
+  });
+
+  it('floors at 5s and caps at 86400s, truncating to an integer', () => {
+    expect(clampDelay(2)).toBe(5);
+    expect(clampDelay(30.9)).toBe(30);
+    expect(clampDelay(999_999)).toBe(86_400);
   });
 });

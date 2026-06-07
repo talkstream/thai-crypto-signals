@@ -13,6 +13,10 @@ import { rollup } from './collector/rollup-job';
 import { cronExprFor } from './config/cadence';
 import type { Fetcher } from './domain/ports';
 import { consumeSignals } from './signals/consumer';
+import { FanOutNotifier } from './signals/notifiers/fan-out';
+import { LineNotifier } from './signals/notifiers/line';
+import { TelegramNotifier } from './signals/notifiers/telegram';
+import { WebhookNotifier } from './signals/notifiers/webhook';
 
 const ROLLUP_CRON = '17 * * * *';
 const MAINTENANCE_CRON = '7 3 * * *';
@@ -89,12 +93,31 @@ export function makeWorker(wiring: WorkerWiring) {
       });
     },
 
-    /* istanbul ignore next -- thin platform glue: unpacks the MessageBatch and builds the AE sink,
-       then delegates to consumeSignals, whose logic IS covered by test/unit/signals-consumer.test.ts.
-       Ignored only because constructing a real MessageBatch needs a runtime cast. (The producer is
-       wired in collect; the queue is fed when SIGNALS_ENABLED is true.) */
+    /* istanbul ignore next -- thin platform glue: builds the channel notifiers from env secrets (a
+       channel is active only when its secret(s) are present) and the call-time `wiring.fetcher`, then
+       delegates to consumeSignals, whose parse->deliver->ack/retry logic IS covered by
+       test/unit/signals-consumer.test.ts. Ignored only because constructing a real MessageBatch and
+       reading secret bindings needs the runtime; the notifier classes are covered by their own tests. */
     async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
-      consumeSignals(batch.messages, new AnalyticsEngineSink(env.METRICS));
+      const obs = new AnalyticsEngineSink(env.METRICS);
+      const telegram =
+        env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID
+          ? { botToken: env.TELEGRAM_BOT_TOKEN, chatId: env.TELEGRAM_CHAT_ID }
+          : undefined;
+      const line =
+        env.LINE_CHANNEL_ACCESS_TOKEN && env.LINE_TARGET_ID
+          ? { channelAccessToken: env.LINE_CHANNEL_ACCESS_TOKEN, targetId: env.LINE_TARGET_ID }
+          : undefined;
+      const webhook =
+        env.WEBHOOK_URL && env.WEBHOOK_SIGNING_SECRET
+          ? { url: env.WEBHOOK_URL, signingSecret: env.WEBHOOK_SIGNING_SECRET }
+          : undefined;
+      const notifier = new FanOutNotifier([
+        new TelegramNotifier(wiring.fetcher, telegram, obs),
+        new LineNotifier(wiring.fetcher, line),
+        new WebhookNotifier(wiring.fetcher, webhook),
+      ]);
+      await consumeSignals(batch.messages, notifier, obs);
     },
   };
 }
