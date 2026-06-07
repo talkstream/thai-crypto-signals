@@ -1,4 +1,15 @@
-<!-- Languages: [ไทย](./README.md) · **English** · [Русский](./README.ru.md) -->
+[![CI](https://github.com/talkstream/thai-crypto-signals/actions/workflows/ci.yml/badge.svg)](https://github.com/talkstream/thai-crypto-signals/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/talkstream/thai-crypto-signals/actions/workflows/codeql.yml/badge.svg)](https://github.com/talkstream/thai-crypto-signals/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/talkstream/thai-crypto-signals/badge)](https://scorecard.dev/viewer/?uri=github.com/talkstream/thai-crypto-signals)
+[![Coverage 100%](https://img.shields.io/badge/coverage-100%25%20live%20code-brightgreen)](#quality)
+[![Tests: real D1+KV · no module mocks](https://img.shields.io/badge/tests-real%20D1%2BKV%20%C2%B7%20no%20module%20mocks-success)](#quality)
+[![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](#quality)
+[![Biome](https://img.shields.io/badge/code%20style-Biome-60a5fa?logo=biome&logoColor=white)](#quality)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-fe5196?logo=conventionalcommits&logoColor=white)](#quality)
+[![Renovate](https://img.shields.io/badge/Renovate-enabled-brightgreen?logo=renovatebot&logoColor=white)](#quality)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
+
+[ไทย](./README.md) · **English** · [Русский](./README.ru.md)
 
 # Thai Crypto Signals — a hands-on guide to collecting exchange rates on Cloudflare Workers
 
@@ -276,6 +287,31 @@ If you can answer these without re-reading, the lessons landed:
 This is a complete, tested, deployable serverless service, small enough to read in an afternoon. Run
 it locally, try one exercise, then open the files from the code tour — each is short and written to
 be read.
+
+## <a id="quality"></a>Quality & Standards
+
+A teaching project held to production engineering standards — every claim below is **checkable, not
+decorative** (run the commands from the repo root):
+
+| Standard / practice | Status | How to verify |
+|---|---|---|
+| Test coverage of the live code | ✅ 100% (446/196/90/411) | `pnpm test:coverage` — thresholds enforced in `vitest.config.ts` |
+| No module mocks · real-infra tests | ✅ | no `vi.mock`/`vi.spyOn`/`vi.fn` **calls** (the names appear only in doc comments); D1+KV run for real (Miniflare); the exchange is an injected recorded-response `Fetcher` |
+| TypeScript strict | ✅ | `tsconfig.json` → `"strict": true`; `pnpm typecheck` (`tsgo --noEmit`) |
+| Lint + format (Biome) | ✅ | `pnpm check` — config in `biome.json` |
+| Hexagonal architecture (ports & adapters) | ✅ | `src/domain/ports.ts` is the hexagon boundary; adapters live in `src/adapters/*` |
+| Conventional Commits | ✅ | `git log` — enforced by `commitlint` via a husky hook |
+| SHA-pinned GitHub Actions | ✅ | every `uses:` in `.github/workflows/*` is a commit SHA + version comment |
+| OpenSSF Scorecard | ✅ published | the badge above → full report on [scorecard.dev](https://scorecard.dev/viewer/?uri=github.com/talkstream/thai-crypto-signals) |
+| CodeQL code scanning | ✅ 0 findings | `.github/workflows/codeql.yml`; results in the repo Security tab |
+| Apache-2.0 license | ✅ | [`LICENSE`](./LICENSE) |
+| Dependency hygiene | ✅ | `renovate.json` — pins action digests, keeps dependencies current |
+
+**Scope, stated honestly.** "State-of-the-art" here means the **engineering method** — 100%
+real-runtime coverage, no-mock contract testing, hexagonal design, and adversarial multi-model code
+review — not a maximal supply-chain posture. Supply-chain hardening is deliberately mid-tier: no SLSA
+provenance, SBOM, or signed releases yet, and branch protection is off because the service deploys on
+direct push to `main` (the Scorecard score reflects both, honestly).
 
 ## References & credits
 

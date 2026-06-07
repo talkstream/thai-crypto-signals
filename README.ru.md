@@ -1,4 +1,15 @@
-<!-- Languages: [ไทย](./README.md) · [English](./README.en.md) · **Русский** -->
+[![CI](https://github.com/talkstream/thai-crypto-signals/actions/workflows/ci.yml/badge.svg)](https://github.com/talkstream/thai-crypto-signals/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/talkstream/thai-crypto-signals/actions/workflows/codeql.yml/badge.svg)](https://github.com/talkstream/thai-crypto-signals/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/talkstream/thai-crypto-signals/badge)](https://scorecard.dev/viewer/?uri=github.com/talkstream/thai-crypto-signals)
+[![Coverage 100%](https://img.shields.io/badge/coverage-100%25%20live%20code-brightgreen)](#quality)
+[![Tests: real D1+KV · no module mocks](https://img.shields.io/badge/tests-real%20D1%2BKV%20%C2%B7%20no%20module%20mocks-success)](#quality)
+[![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](#quality)
+[![Biome](https://img.shields.io/badge/code%20style-Biome-60a5fa?logo=biome&logoColor=white)](#quality)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-fe5196?logo=conventionalcommits&logoColor=white)](#quality)
+[![Renovate](https://img.shields.io/badge/Renovate-enabled-brightgreen?logo=renovatebot&logoColor=white)](#quality)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
+
+[ไทย](./README.md) · [English](./README.en.md) · **Русский**
 
 # Thai Crypto Signals — практическое руководство по сбору биржевых курсов на Cloudflare Workers
 
@@ -267,6 +278,31 @@ pnpm exec wrangler queues delete my-signals-dlq
 Это законченный, протестированный и готовый к деплою serverless-сервис, который можно прочитать за
 вечер. Запустите локально, попробуйте упражнение, потом откройте файлы из экскурсии по коду — каждый
 короткий и написан так, чтобы его читали.
+
+## <a id="quality"></a>Качество и стандарты
+
+Учебный проект, удерживаемый на production-стандартах инженерии — и каждое утверждение ниже
+**проверяемо, а не декоративно** (команды выполняются из корня репозитория):
+
+| Стандарт / практика | Статус | Как проверить |
+|---|---|---|
+| Покрытие живого кода тестами | ✅ 100% (446/196/90/411) | `pnpm test:coverage` — пороги заданы в `vitest.config.ts` |
+| Без моков модулей · тесты на настоящей инфраструктуре | ✅ | ни одного **вызова** `vi.mock`/`vi.spyOn`/`vi.fn` (имена встречаются только в комментариях); D1+KV поднимаются настоящие (Miniflare); биржа — инъектируемый `Fetcher` с записанными ответами |
+| Строгий TypeScript | ✅ | `tsconfig.json` → `"strict": true`; `pnpm typecheck` (`tsgo --noEmit`) |
+| Линт + формат (Biome) | ✅ | `pnpm check` — конфиг в `biome.json` |
+| Гексагональная архитектура (порты и адаптеры) | ✅ | граница гексагона — `src/domain/ports.ts`; адаптеры в `src/adapters/*` |
+| Conventional Commits | ✅ | `git log` — проверяется `commitlint` через хук husky |
+| GitHub Actions, пиннутые по SHA | ✅ | каждый `uses:` в `.github/workflows/*` — это commit SHA + комментарий с версией |
+| OpenSSF Scorecard | ✅ опубликован | бейдж выше → полный отчёт на [scorecard.dev](https://scorecard.dev/viewer/?uri=github.com/talkstream/thai-crypto-signals) |
+| Сканирование кода CodeQL | ✅ 0 находок | `.github/workflows/codeql.yml`; результаты во вкладке Security |
+| Лицензия Apache-2.0 | ✅ | [`LICENSE`](./LICENSE) |
+| Гигиена зависимостей | ✅ | `renovate.json` — пинит дайджесты actions, обновляет зависимости |
+
+**Честно о границах.** «State-of-the-art» здесь — про **инженерный метод**: 100% покрытие на реальном
+рантайме, контрактное тестирование без моков, гексагональный дизайн и состязательное мульти-модельное
+ревью, — а не про максимальный supply-chain. Усиление цепочки поставок намеренно среднего уровня: пока
+без SLSA-provenance, SBOM и подписанных релизов, а branch protection выключен, потому что сервис
+деплоится по прямому push в `main` (балл Scorecard это честно отражает).
 
 ## Источники и благодарности
 

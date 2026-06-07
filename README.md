@@ -1,4 +1,15 @@
-<!-- Languages: **ไทย** · [English](./README.en.md) · [Русский](./README.ru.md) -->
+[![CI](https://github.com/talkstream/thai-crypto-signals/actions/workflows/ci.yml/badge.svg)](https://github.com/talkstream/thai-crypto-signals/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/talkstream/thai-crypto-signals/actions/workflows/codeql.yml/badge.svg)](https://github.com/talkstream/thai-crypto-signals/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/talkstream/thai-crypto-signals/badge)](https://scorecard.dev/viewer/?uri=github.com/talkstream/thai-crypto-signals)
+[![Coverage 100%](https://img.shields.io/badge/coverage-100%25%20live%20code-brightgreen)](#quality)
+[![Tests: real D1+KV · no module mocks](https://img.shields.io/badge/tests-real%20D1%2BKV%20%C2%B7%20no%20module%20mocks-success)](#quality)
+[![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](#quality)
+[![Biome](https://img.shields.io/badge/code%20style-Biome-60a5fa?logo=biome&logoColor=white)](#quality)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-fe5196?logo=conventionalcommits&logoColor=white)](#quality)
+[![Renovate](https://img.shields.io/badge/Renovate-enabled-brightgreen?logo=renovatebot&logoColor=white)](#quality)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
+
+**ไทย** · [English](./README.en.md) · [Русский](./README.ru.md)
 
 > 🇹🇭 **ฉบับร่างจากชุมชน — รอการตรวจทานจากเจ้าของภาษา.** เอกสารภาษาไทยฉบับนี้เขียนขึ้นอย่างตั้งใจ
 > แต่ยังรอการตรวจทานขั้นสุดท้ายจากผู้ที่เป็นเจ้าของภาษา หากพบคำผิดหรือสำนวนที่ไม่เป็นธรรมชาติ
@@ -270,6 +281,30 @@ pnpm exec wrangler queues delete my-signals-dlq
 
 นี่คือบริการ serverless ที่สมบูรณ์ ทดสอบแล้ว และ deploy ได้ เล็กพอจะอ่านจบได้ภายในวันเดียว ลองรันในเครื่อง
 ทำแบบฝึกหัดสักข้อ แล้วเปิดไฟล์จากหัวข้อเดินชมโค้ด แต่ละไฟล์สั้นและเขียนไว้ให้อ่านเข้าใจ
+
+## <a id="quality"></a>คุณภาพและมาตรฐาน
+
+โปรเจกต์เพื่อการเรียนรู้ แต่ยึดมาตรฐานวิศวกรรมระดับ production — และทุกข้อด้านล่าง **ตรวจสอบได้จริง ไม่ใช่แค่ป้ายประดับ**
+(รันคำสั่งจากรากของ repo):
+
+| มาตรฐาน / แนวปฏิบัติ | สถานะ | วิธีตรวจสอบ |
+|---|---|---|
+| ความครอบคลุมเทสต์ของโค้ดที่ใช้งานจริง | ✅ 100% (446/196/90/411) | `pnpm test:coverage` — เกณฑ์กำหนดใน `vitest.config.ts` |
+| ไม่ม็อกโมดูล · เทสต์บนโครงสร้างจริง | ✅ | ไม่มีการ **เรียกใช้** `vi.mock`/`vi.spyOn`/`vi.fn` เลย (ชื่อเหล่านี้ปรากฏแค่ในคอมเมนต์); D1+KV เป็นของจริง (Miniflare); ตัวแลกเปลี่ยนคือ `Fetcher` ที่ฉีดเข้ามาพร้อมคำตอบที่บันทึกไว้ |
+| TypeScript แบบ strict | ✅ | `tsconfig.json` → `"strict": true`; `pnpm typecheck` (`tsgo --noEmit`) |
+| Lint + format (Biome) | ✅ | `pnpm check` — คอนฟิกใน `biome.json` |
+| สถาปัตยกรรม Hexagonal (ports & adapters) | ✅ | ขอบเขต hexagon คือ `src/domain/ports.ts`; adapters อยู่ใน `src/adapters/*` |
+| Conventional Commits | ✅ | `git log` — บังคับด้วย `commitlint` ผ่าน husky |
+| GitHub Actions ตรึงด้วย SHA | ✅ | ทุก `uses:` ใน `.github/workflows/*` เป็น commit SHA พร้อมคอมเมนต์เวอร์ชัน |
+| OpenSSF Scorecard | ✅ เผยแพร่แล้ว | ดูแบดจ์ด้านบน → รายงานเต็มที่ [scorecard.dev](https://scorecard.dev/viewer/?uri=github.com/talkstream/thai-crypto-signals) |
+| การสแกนโค้ด CodeQL | ✅ 0 รายการ | `.github/workflows/codeql.yml`; ผลอยู่ในแท็บ Security |
+| สัญญาอนุญาต Apache-2.0 | ✅ | [`LICENSE`](./LICENSE) |
+| สุขอนามัยของ dependency | ✅ | `renovate.json` — ตรึง digests ของ actions และอัปเดต dependency |
+
+**ขอบเขต พูดกันตรง ๆ** "State-of-the-art" ในที่นี้หมายถึง **วิธีการทางวิศวกรรม** — ความครอบคลุม 100% บนรันไทม์จริง,
+การทดสอบแบบ contract โดยไม่ม็อก, ดีไซน์ hexagonal และการรีวิวแบบปะทะหลายโมเดล — ไม่ใช่การทำ supply-chain ให้สุดทาง
+การเสริมความแข็งแรงของ supply-chain จงใจอยู่ระดับกลาง: ยังไม่มี SLSA-provenance, SBOM หรือ signed releases และ
+branch protection ปิดอยู่ เพราะบริการดีพลอยด้วยการ push ตรงเข้า `main` (คะแนน Scorecard สะท้อนสิ่งเหล่านี้อย่างตรงไปตรงมา)
 
 ## แหล่งอ้างอิงและเครดิต
 
