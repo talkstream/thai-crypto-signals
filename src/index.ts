@@ -4,6 +4,7 @@ import { SystemClock, SystemRng } from './adapters/runtime';
 import { QueueDispatcher } from './adapters/signals/queue-dispatcher';
 import { KvCacheWriter } from './adapters/storage/cache-writer';
 import { D1CollectStore } from './adapters/storage/collect-store';
+import { D1SignalConfigStore } from './adapters/storage/config-store';
 import { D1ReadStore } from './adapters/storage/read-store';
 import { D1SymbolStore } from './adapters/storage/symbol-store';
 import { handleRequest } from './api/router';
@@ -12,6 +13,7 @@ import { maintenance } from './collector/maintenance';
 import { rollup } from './collector/rollup-job';
 import { cronExprFor } from './config/cadence';
 import type { Fetcher } from './domain/ports';
+import { resolveSignalConfig } from './signals/config';
 import { consumeSignals } from './signals/consumer';
 import { parseWatchlist } from './signals/watchlist';
 import { buildNotifier } from './signals/wiring';
@@ -67,6 +69,12 @@ export function makeWorker(wiring: WorkerWiring) {
         return;
       }
       if (controller.cron === collectCron) {
+        // The live config (watchlist + threshold) comes from D1 — edited by the in-bot UI — falling
+        // back to the SIGNAL_* env vars as the seed/default when the row is absent.
+        const cfg = await resolveSignalConfig(new D1SignalConfigStore(env.DB), {
+          watchlist: [...parseWatchlist(env.SIGNAL_WATCHLIST)],
+          thresholdBp: Number(env.SIGNAL_PCT_THRESHOLD_BP),
+        });
         await collect({
           marketData: bitkub(env, clock, wiring.fetcher),
           symbols: new D1SymbolStore(env.DB),
@@ -77,8 +85,8 @@ export function makeWorker(wiring: WorkerWiring) {
           cadenceMinutes: cadence,
           dispatcher: new QueueDispatcher(env.SIGNALS_QUEUE),
           signalsEnabled: String(env.SIGNALS_ENABLED) === 'true',
-          signalThresholdBp: Number(env.SIGNAL_PCT_THRESHOLD_BP),
-          signalWatchlist: parseWatchlist(env.SIGNAL_WATCHLIST),
+          signalThresholdBp: cfg.thresholdBp,
+          signalWatchlist: new Set(cfg.watchlist),
         });
       }
     },

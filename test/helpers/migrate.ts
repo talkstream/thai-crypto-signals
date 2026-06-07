@@ -1,5 +1,6 @@
 import init from '../../migrations/0001_init.sql?raw';
 import rollups from '../../migrations/0002_rollups.sql?raw';
+import signalConfig from '../../migrations/0003_signal_config.sql?raw';
 
 // Split a migration file into runnable statements (strip full-line `--` comments, split on `;`).
 function statements(sql: string): string[] {
@@ -14,14 +15,21 @@ function statements(sql: string): string[] {
 
 /** Apply all migrations to a fresh test D1 database. */
 export async function applyMigrations(db: D1Database): Promise<void> {
-  for (const sql of [init, rollups]) {
+  for (const sql of [init, rollups, signalConfig]) {
     for (const stmt of statements(sql)) {
       await db.prepare(stmt).run();
     }
   }
 }
 
-const TABLES = ['ticker_snapshots', 'collection_runs', 'rollups_1h', 'rollups_1d', 'symbols'];
+const TABLES = [
+  'ticker_snapshots',
+  'collection_runs',
+  'rollups_1h',
+  'rollups_1d',
+  'symbols',
+  'signal_config',
+];
 
 /**
  * Clean schema+data reset for each test. The Workers pool isolates storage per test FILE
