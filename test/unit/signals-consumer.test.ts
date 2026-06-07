@@ -214,6 +214,17 @@ describe('consumeSignals (deliver -> ack/retry)', () => {
     expect(obs.events.filter((e) => e.kind === 'signal_delivered').length).toBe(1);
   });
 
+  it('emits signal_undelivered (not signal_delivered) when nothing was delivered', async () => {
+    const obs = new InMemoryObservabilitySink();
+    const m = recorder(VALID);
+    // all channels unconfigured -> skipped, delivered=0: ack but do not claim a delivery
+    await consumeSignals([m.message], notifierReturning({ skipped: 3 }), obs, true);
+
+    expect(m.acked).toBe(1);
+    expect(obs.events.some((e) => e.kind === 'signal_undelivered')).toBe(true);
+    expect(obs.events.some((e) => e.kind === 'signal_delivered')).toBe(false);
+  });
+
   it('does nothing on an empty batch', async () => {
     const obs = new InMemoryObservabilitySink();
     await consumeSignals([], notifierReturning({ delivered: 1 }), obs, true);

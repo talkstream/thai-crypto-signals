@@ -43,8 +43,9 @@ export interface AckableMessage {
  *   - NOTHING delivered + only retry-safe failures -> emit + retry (no ack); up to max_retries -> DLQ
  *   - an AMBIGUOUS failure (non-idempotent channel may have taken effect) -> emit signal_ambiguous + ack
  *   - a transient failure ALONGSIDE a success (partial) -> emit signal_partial + ack
- *   - otherwise (delivered/skipped/permanent) -> emit + ack
- *   - unexpected throw -> emit + retry
+ *   - at least one channel delivered -> emit signal_delivered + ack
+ *   - nothing delivered, no transient/ambiguous (only skipped/permanent) -> emit signal_undelivered + ack
+ *   - unexpected throw (defensive; FanOut itself never throws) -> emit + retry
  *
  * Delivery is AT-LEAST-ONCE (Cloudflare Queues redeliver). The retry rule MINIMISES duplicates: a
  * redelivery is only triggered when nothing was delivered AND every failure is retry-safe, so it never
@@ -107,7 +108,7 @@ export async function consumeSignals(
             {},
             { delivered: result.delivered, transient: result.transientFailures, attempts },
           );
-        } else {
+        } else if (result.delivered > 0) {
           safeEvent(
             obs,
             'signal_delivered',
@@ -117,6 +118,15 @@ export async function consumeSignals(
               skipped: result.skipped,
               permanent: result.permanentFailures,
             },
+          );
+        } else {
+          // delivered=0 with no transient/ambiguous: only skipped (unconfigured channels) and/or
+          // permanent failures — nothing was actually delivered, so do not claim a delivery.
+          safeEvent(
+            obs,
+            'signal_undelivered',
+            {},
+            { skipped: result.skipped, permanent: result.permanentFailures, attempts },
           );
         }
         message.ack();

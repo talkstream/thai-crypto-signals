@@ -1,5 +1,6 @@
 import type { DeliveryResult, Notifier } from '../notifier';
 import type { SignalJob } from '../types';
+import { ambiguous } from './result';
 
 function maxDefined(a: number | undefined, b: number | undefined): number | undefined {
   if (a === undefined) return b;
@@ -16,7 +17,11 @@ export class FanOutNotifier implements Notifier {
   constructor(private readonly channels: readonly Notifier[]) {}
 
   async deliver(job: SignalJob): Promise<DeliveryResult> {
-    const results = await Promise.all(this.channels.map((c) => c.deliver(job)));
+    // allSettled, never reject: an unexpected throw from one channel must NOT discard the results of
+    // channels that already completed in parallel (and could be a real send). A thrown channel becomes
+    // an AMBIGUOUS failure — the consumer then acks (no retry) rather than re-sending the completed ones.
+    const settled = await Promise.allSettled(this.channels.map((c) => c.deliver(job)));
+    const results = settled.map((s) => (s.status === 'fulfilled' ? s.value : ambiguous()));
     return results.reduce<DeliveryResult>(
       (acc, r) => {
         const retryAfterSec = maxDefined(acc.retryAfterSec, r.retryAfterSec);

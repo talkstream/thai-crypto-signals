@@ -75,4 +75,15 @@ describe('FanOutNotifier', () => {
     expect(r.ambiguousFailures).toBe(1);
     expect(r.transientFailures).toBe(0);
   });
+
+  it('treats a throwing channel as ambiguous (allSettled) without discarding the others', async () => {
+    const throwing: Notifier = {
+      deliver: async () => {
+        throw new Error('boom');
+      },
+    };
+    const r = await new FanOutNotifier([stub({ delivered: 1 }), throwing]).deliver(JOB);
+    expect(r.delivered).toBe(1); // the completed channel's result is preserved
+    expect(r.ambiguousFailures).toBe(1); // the throw became an ambiguous failure (no retry)
+  });
 });
