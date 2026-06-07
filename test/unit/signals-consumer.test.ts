@@ -11,6 +11,7 @@ const RESULT: DeliveryResult = {
   skipped: 0,
   permanentFailures: 0,
   transientFailures: 0,
+  ambiguousFailures: 0,
 };
 const notifierReturning = (over: Partial<DeliveryResult>): Notifier => ({
   deliver: async () => ({ ...RESULT, ...over }),
@@ -144,6 +145,23 @@ describe('consumeSignals (deliver -> ack/retry)', () => {
 
     expect(m.acked).toBe(1);
     expect(obs.events.some((e) => e.kind === 'signal_invalid')).toBe(true);
+  });
+
+  it('acks (no retry) on an ambiguous failure, emitting signal_ambiguous (avoid duplicate)', async () => {
+    const obs = new InMemoryObservabilitySink();
+    const m = recorder(VALID);
+    // LINE transient + Telegram ambiguous, nothing delivered: retrying could re-send Telegram (no
+    // idempotency key), so the message is acked, not redelivered.
+    await consumeSignals(
+      [m.message],
+      notifierReturning({ transientFailures: 1, ambiguousFailures: 1 }),
+      obs,
+      true,
+    );
+
+    expect(m.acked).toBe(1);
+    expect(m.retried).toBe(0);
+    expect(obs.events.some((e) => e.kind === 'signal_ambiguous')).toBe(true);
   });
 
   it('retries (does NOT drop) when deliver throws unexpectedly', async () => {

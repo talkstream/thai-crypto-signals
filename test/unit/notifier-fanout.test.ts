@@ -12,6 +12,7 @@ const base: DeliveryResult = {
   skipped: 0,
   permanentFailures: 0,
   transientFailures: 0,
+  ambiguousFailures: 0,
 };
 const stub = (over: Partial<DeliveryResult>): Notifier => ({
   deliver: async () => ({ ...base, ...over }),
@@ -63,5 +64,15 @@ describe('FanOutNotifier', () => {
     expect(r.permanentFailures).toBe(1);
     expect(r.transientFailures).toBe(0);
     expect(r.retryAfterSec).toBeUndefined();
+  });
+
+  it('sums ambiguous failures (e.g. a Telegram transport error) alongside delivered', async () => {
+    const r = await new FanOutNotifier([
+      stub({ delivered: 1 }),
+      stub({ ambiguousFailures: 1 }),
+    ]).deliver(JOB);
+    expect(r.delivered).toBe(1);
+    expect(r.ambiguousFailures).toBe(1);
+    expect(r.transientFailures).toBe(0);
   });
 });

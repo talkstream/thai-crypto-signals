@@ -46,11 +46,13 @@ export class TelegramNotifier implements Notifier {
         body: JSON.stringify({ chat_id: this.cfg.chatId, text }),
       });
     } catch {
-      return R.transient(); // network error — retry
+      // Network error: the request may already have reached Telegram. With no idempotency key, a
+      // retry could duplicate — mark ambiguous (the consumer will NOT retry).
+      return R.ambiguous();
     }
     if (res.ok) return R.delivered();
-    if (res.status === 429) return R.transient(await telegramRetryAfter(res));
-    if (res.status >= 500) return R.transient();
+    if (res.status === 429) return R.transient(await telegramRetryAfter(res)); // rate-limited = not sent
+    if (res.status >= 500) return R.ambiguous(); // server error: may have taken effect — do not retry-dup
     if (res.status === 401 || res.status === 403) {
       // operator misconfig (dead token) or the bot was blocked — surface it, still permanent.
       safeEvent(this.obs, 'notify_telegram_auth', { status: String(res.status) }, { count: 1 });

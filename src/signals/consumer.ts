@@ -40,15 +40,18 @@ export interface AckableMessage {
  * any un-dispositioned message by default, and a rejected handler retries the whole batch. Disposition:
  *   - signals disabled (kill switch) -> emit + ack (drop; no delivery even for in-flight messages)
  *   - invalid body (or oversized)  -> emit + ack (it can never become valid; never retry)
- *   - NOTHING delivered + a transient failure -> emit + retry (no ack); retried up to max_retries -> DLQ
+ *   - NOTHING delivered + only retry-safe failures -> emit + retry (no ack); up to max_retries -> DLQ
+ *   - an AMBIGUOUS failure (non-idempotent channel may have taken effect) -> emit signal_ambiguous + ack
  *   - a transient failure ALONGSIDE a success (partial) -> emit signal_partial + ack
  *   - otherwise (delivered/skipped/permanent) -> emit + ack
  *   - unexpected throw -> emit + retry
  *
- * Retrying ONLY when nothing was delivered keeps redelivery duplicate-free: re-running every channel
- * on a queue redelivery can never re-send an already-successful channel, because none succeeded this
- * attempt. A channel that transiently failed while another succeeded is retried on the next tick, not
- * by redelivering this message (which would duplicate the channel that already delivered).
+ * Delivery is AT-LEAST-ONCE (Cloudflare Queues redeliver). The retry rule MINIMISES duplicates: a
+ * redelivery is only triggered when nothing was delivered AND every failure is retry-safe, so it never
+ * re-sends an already-delivered channel nor a non-idempotent channel (Telegram) whose request may have
+ * taken effect. LINE (X-Line-Retry-Key) and the webhook (signed `bucketTs` for receiver dedup) dedupe
+ * their own redeliveries; Telegram has no idempotency key, so it is acked on ambiguous transport
+ * failures (at-most-once there) and can still duplicate only on the rare lost-ack redelivery.
  *
  * `signalsEnabled` gates the CONSUME side too: with the flag off, queued/redelivered messages are
  * dropped, not delivered — so the committed `SIGNALS_ENABLED="false"` is a true delivery kill switch,
@@ -75,13 +78,27 @@ export async function consumeSignals(
         continue;
       }
       const result = await notifier.deliver(parsed.data);
-      if (result.delivered === 0 && result.transientFailures > 0) {
-        // Nothing delivered: safe to retry — re-running all channels cannot duplicate a prior send.
+      if (
+        result.delivered === 0 &&
+        result.transientFailures > 0 &&
+        result.ambiguousFailures === 0
+      ) {
+        // Nothing delivered and only retry-safe failures (not-yet-sent / idempotent channels): a queue
+        // redelivery re-runs all channels but cannot duplicate (none delivered; the failed ones dedupe).
         safeEvent(obs, 'signal_retry', {}, { transient: result.transientFailures, attempts });
         const delaySeconds = clampDelay(result.retryAfterSec);
         message.retry(delaySeconds === undefined ? undefined : { delaySeconds });
       } else {
-        if (result.transientFailures > 0) {
+        if (result.ambiguousFailures > 0) {
+          // A non-idempotent channel (Telegram) failed ambiguously: ack rather than redeliver, so the
+          // send is not duplicated (it may already have taken effect); that channel is at-most-once here.
+          safeEvent(
+            obs,
+            'signal_ambiguous',
+            {},
+            { delivered: result.delivered, ambiguous: result.ambiguousFailures, attempts },
+          );
+        } else if (result.transientFailures > 0) {
           // Partial: a channel delivered, so acking avoids re-sending it; the transient channel is
           // retried on the next tick, not by redelivering this (which would duplicate the delivered one).
           safeEvent(

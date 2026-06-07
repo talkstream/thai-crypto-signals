@@ -63,16 +63,20 @@ describe('TelegramNotifier', () => {
     expect(r.retryAfterSec).toBe(12);
   });
 
-  it('treats 5xx as transient', async () => {
+  it('treats 5xx as ambiguous (no idempotency key — do not retry-duplicate)', async () => {
     const f = recordingFetcher(() => new Response('boom', { status: 503 }));
-    expect((await notifier(f.fetcher).deliver(JOB)).transientFailures).toBe(1);
+    const r = await notifier(f.fetcher).deliver(JOB);
+    expect(r.ambiguousFailures).toBe(1);
+    expect(r.transientFailures).toBe(0);
   });
 
-  it('treats a network throw as transient', async () => {
+  it('treats a network throw as ambiguous (the send may already have reached Telegram)', async () => {
     const f = recordingFetcher(() => {
       throw new TypeError('network down');
     });
-    expect((await notifier(f.fetcher).deliver(JOB)).transientFailures).toBe(1);
+    const r = await notifier(f.fetcher).deliver(JOB);
+    expect(r.ambiguousFailures).toBe(1);
+    expect(r.transientFailures).toBe(0);
   });
 
   it('treats a 4xx (non-429) as permanent with no retry', async () => {

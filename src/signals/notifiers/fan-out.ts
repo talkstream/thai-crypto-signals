@@ -25,12 +25,19 @@ export class FanOutNotifier implements Notifier {
           skipped: acc.skipped + r.skipped,
           permanentFailures: acc.permanentFailures + r.permanentFailures,
           transientFailures: acc.transientFailures + r.transientFailures,
+          ambiguousFailures: acc.ambiguousFailures + r.ambiguousFailures,
         };
         // Only set the optional field when present (exactOptionalPropertyTypes).
         if (retryAfterSec !== undefined) next.retryAfterSec = retryAfterSec;
         return next;
       },
-      { delivered: 0, skipped: 0, permanentFailures: 0, transientFailures: 0 },
+      {
+        delivered: 0,
+        skipped: 0,
+        permanentFailures: 0,
+        transientFailures: 0,
+        ambiguousFailures: 0,
+      },
     );
   }
 }
