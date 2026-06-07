@@ -81,6 +81,21 @@ describe('consumeSignals (deliver -> ack/retry)', () => {
     expect(m.retryOpts[0]).toBeUndefined();
   });
 
+  it('acks a partial result (a channel delivered + one transient) WITHOUT retrying — no duplicate', async () => {
+    const obs = new InMemoryObservabilitySink();
+    const m = recorder(VALID);
+    await consumeSignals(
+      [m.message],
+      notifierReturning({ delivered: 1, transientFailures: 1, retryAfterSec: 30 }),
+      obs,
+      true,
+    );
+
+    expect(m.acked).toBe(1); // acked: retrying would re-send the already-delivered channel
+    expect(m.retried).toBe(0);
+    expect(obs.events.some((e) => e.kind === 'signal_partial')).toBe(true);
+  });
+
   it('acks and flags an invalid body without ever calling the notifier', async () => {
     const obs = new InMemoryObservabilitySink();
     const m = recorder({ not: 'a job' });
@@ -106,6 +121,15 @@ describe('consumeSignals (deliver -> ack/retry)', () => {
   it('acks (drops) a job with a non-finite bucketTs as invalid', async () => {
     const obs = new InMemoryObservabilitySink();
     const m = recorder({ ...VALID, bucketTs: Number.POSITIVE_INFINITY });
+    await consumeSignals([m.message], notifierReturning({ delivered: 1 }), obs, true);
+
+    expect(m.acked).toBe(1);
+    expect(obs.events.some((e) => e.kind === 'signal_invalid')).toBe(true);
+  });
+
+  it('acks (drops) a finite but out-of-Date-range epoch timestamp as invalid', async () => {
+    const obs = new InMemoryObservabilitySink();
+    const m = recorder({ ...VALID, bucketTs: 8_640_000_000_000_001 }); // > JS Date max -> Intl throws
     await consumeSignals([m.message], notifierReturning({ delivered: 1 }), obs, true);
 
     expect(m.acked).toBe(1);
