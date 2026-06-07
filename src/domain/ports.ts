@@ -1,7 +1,7 @@
 // Hexagon boundary. The domain/use-cases depend ONLY on these interfaces.
 // Storage ports (SymbolStore, CollectStore, RollupStore) are added in the storage layer.
 
-import type { SignalConfig } from '../signals/config';
+import type { BotConfigState, SignalConfig } from '../signals/config';
 import type { SignalJob } from '../signals/types';
 import type { CatalogEntry, RunRecord, SymbolMap, TickerSnapshot } from './types';
 
@@ -52,12 +52,18 @@ export interface SignalDispatcher {
   enqueue(job: SignalJob): Promise<void>;
 }
 
-/** The live signal config (watchlist + threshold) the in-bot UI edits and the producer reads. */
+/** The live signal config the producer READS each tick (the in-bot UI writes via {@link BotConfigStore}). */
 export interface SignalConfigStore {
   /** The current config, or null if the row is unset (caller falls back to the env-seeded default). */
   load(): Promise<SignalConfig | null>;
-  /** Upsert the single global config row. */
-  save(config: SignalConfig, nowMs: number): Promise<void>;
+}
+
+/** The in-bot UI's read/write of the FULL config row (incl. the pending-input marker); save is atomic. */
+export interface BotConfigStore {
+  /** The full row (config + pending), or null if absent. */
+  loadState(): Promise<BotConfigState | null>;
+  /** Upsert the WHOLE row in one statement — robust to an absent row, no config/pending clobber. */
+  saveState(state: BotConfigState, nowMs: number): Promise<void>;
 }
 
 /** Symbol catalog persistence. The map carries the permanent surrogate id per symbol. */

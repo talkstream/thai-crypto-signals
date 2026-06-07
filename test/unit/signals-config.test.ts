@@ -5,7 +5,6 @@ import { resolveSignalConfig, type SignalConfig } from '../../src/signals/config
 // Plain port-double (DI, not vi.mock): a store that returns a fixed load() result.
 const storeReturning = (cfg: SignalConfig | null): SignalConfigStore => ({
   load: async () => cfg,
-  save: async () => {},
 });
 
 const DEFAULTS: SignalConfig = { watchlist: ['TON_THB'], thresholdBp: 300 };

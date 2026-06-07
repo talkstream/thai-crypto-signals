@@ -11,6 +11,17 @@ export interface SignalConfig {
   thresholdBp: number;
 }
 
+/** The bot's "awaiting a custom text reply" marker (NULL = idle). */
+export type PendingAction = 'threshold' | 'add';
+
+/**
+ * The FULL config row the in-bot UI reads + writes atomically: the producer's {@link SignalConfig} plus
+ * the transient `pending` input marker. One `saveState` upsert sets all of it (no clobber, no race).
+ */
+export interface BotConfigState extends SignalConfig {
+  pending: PendingAction | null;
+}
+
 /**
  * The stored config if the row is present, else the supplied `defaults` (seeded from the SIGNAL_* env
  * vars). One read per collect tick; the store (D1) is strongly consistent, so an edit applies next tick.

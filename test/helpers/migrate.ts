@@ -1,6 +1,7 @@
 import init from '../../migrations/0001_init.sql?raw';
 import rollups from '../../migrations/0002_rollups.sql?raw';
 import signalConfig from '../../migrations/0003_signal_config.sql?raw';
+import signalConfigPending from '../../migrations/0004_signal_config_pending.sql?raw';
 
 // Split a migration file into runnable statements (strip full-line `--` comments, split on `;`).
 function statements(sql: string): string[] {
@@ -15,7 +16,7 @@ function statements(sql: string): string[] {
 
 /** Apply all migrations to a fresh test D1 database. */
 export async function applyMigrations(db: D1Database): Promise<void> {
-  for (const sql of [init, rollups, signalConfig]) {
+  for (const sql of [init, rollups, signalConfig, signalConfigPending]) {
     for (const stmt of statements(sql)) {
       await db.prepare(stmt).run();
     }
