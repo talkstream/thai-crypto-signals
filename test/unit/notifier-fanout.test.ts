@@ -3,7 +3,12 @@ import type { DeliveryResult, Notifier } from '../../src/signals/notifier';
 import { FanOutNotifier } from '../../src/signals/notifiers/fan-out';
 import type { SignalJob } from '../../src/signals/types';
 
-const JOB: SignalJob = { bucketTs: 1, symbols: ['BTC_THB'], producedAt: 2, schemaVersion: 1 };
+const JOB: SignalJob = {
+  bucketTs: 1,
+  movers: [{ symbol: 'BTC_THB', changeBp: 342, priceMinor: 100, scale: 2 }],
+  producedAt: 2,
+  schemaVersion: 2,
+};
 
 // Plain stub channels (DI, not vi.mock): each returns a fixed per-channel DeliveryResult so we test
 // the FanOut's summation + max-retryAfter logic in isolation.

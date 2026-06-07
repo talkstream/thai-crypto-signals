@@ -23,7 +23,12 @@ const throwingNotifier: Notifier = {
   },
 };
 
-const VALID = { bucketTs: 1, symbols: ['BTC_THB'], producedAt: 2, schemaVersion: 1 };
+const VALID = {
+  bucketTs: 1,
+  movers: [{ symbol: 'BTC_THB', changeBp: 342, priceMinor: 100, scale: 2 }],
+  producedAt: 2,
+  schemaVersion: 2,
+};
 
 interface Recorder {
   message: AckableMessage;
@@ -158,8 +163,30 @@ describe('consumeSignals (deliver -> ack/retry)', () => {
 
   it('acks (drops) an oversized job rather than 4xx-looping a channel', async () => {
     const obs = new InMemoryObservabilitySink();
-    const huge = { ...VALID, symbols: Array.from({ length: 2001 }, (_, i) => `S${i}_THB`) };
+    const huge = {
+      ...VALID,
+      movers: Array.from({ length: 2001 }, (_, i) => ({
+        symbol: `S${i}_THB`,
+        changeBp: 342,
+        priceMinor: 100,
+        scale: 2,
+      })),
+    };
     const m = recorder(huge);
+    await consumeSignals([m.message], notifierReturning({ delivered: 1 }), obs, true);
+
+    expect(m.acked).toBe(1);
+    expect(obs.events.some((e) => e.kind === 'signal_invalid')).toBe(true);
+  });
+
+  it('acks (drops) a job whose mover has an out-of-range price scale (toFixed guard)', async () => {
+    const obs = new InMemoryObservabilitySink();
+    // scale 999 would throw RangeError in toFixed(scale); the schema rejects it as invalid first.
+    const bad = {
+      ...VALID,
+      movers: [{ symbol: 'BTC_THB', changeBp: 342, priceMinor: 100, scale: 999 }],
+    };
+    const m = recorder(bad);
     await consumeSignals([m.message], notifierReturning({ delivered: 1 }), obs, true);
 
     expect(m.acked).toBe(1);

@@ -1,4 +1,4 @@
-import type { SignalJob } from './types';
+import type { Mover, SignalJob } from './types';
 
 // ICT (Asia/Bangkok, no DST). `Intl.DateTimeFormat` is configured once at module load — it does NOT
 // read the wall clock, so the no-wallclock guard stays satisfied; the bucket time comes from the
@@ -17,18 +17,33 @@ const ICT = new Intl.DateTimeFormat('en-CA', {
 const MAX_LISTED = 12;
 
 /**
- * The signal delivery body: a concise, plain-text line naming the symbols that fired the rule this
- * bucket (the movers), capped with a "+N more" tail. No markup — sent without a Telegram `parse_mode`,
- * so the literal text is injection-safe (symbol names are exchange-controlled but ASCII tickers, and a
- * date's `-`/`.`/`=` would otherwise need MarkdownV2 escaping).
+ * One mover line, e.g. `🟢 TON +3.42%  ฿100.00` (up) or `🔴 TON -3.10%  ฿96.80` (down). A green/red
+ * circle conveys direction-with-colour where real text colour isn't available (Telegram plain text has
+ * none; LINE only via Flex). The pair's quote is stripped for the display name (TON_THB → TON), the
+ * sign is explicit, and the price is rendered from integer minor units at the pair's scale.
+ */
+function formatMover(m: Mover): string {
+  const up = m.changeBp > 0;
+  const marker = up ? '🟢' : '🔴';
+  const base = m.symbol.split('_')[0];
+  const pct = (m.changeBp / 100).toFixed(2); // bp → percent; negatives keep their leading '-'
+  const signedPct = up ? `+${pct}%` : `${pct}%`;
+  const price = (m.priceMinor / 10 ** m.scale).toFixed(m.scale);
+  return `${marker} ${base} ${signedPct}  ฿${price}`;
+}
+
+/**
+ * The signal delivery body: a header with the bucket time in ICT, then one human line per mover
+ * (direction, percent, price), capped with a "+N more" tail. Plain text only — sent without a Telegram
+ * `parse_mode`, so the literal text (emoji, `฿`, ASCII sign) is injection-safe and needs no escaping.
  */
 export function formatSignalMessage(job: SignalJob): string {
   const p = Object.fromEntries(ICT.formatToParts(job.bucketTs).map((x) => [x.type, x.value]));
   const ts = `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
-  const n = job.symbols.length;
-  const head = job.symbols.slice(0, MAX_LISTED).join(', ');
-  const tail = n > MAX_LISTED ? `, +${n - MAX_LISTED} more` : '';
-  return `TCS signal ${ts} ICT — ${n} symbol${n === 1 ? '' : 's'} moved: ${head}${tail}`;
+  const n = job.movers.length;
+  const lines = job.movers.slice(0, MAX_LISTED).map(formatMover);
+  if (n > MAX_LISTED) lines.push(`… +${n - MAX_LISTED} more`);
+  return [`TCS · ${ts} ICT`, ...lines].join('\n');
 }
 
 /**

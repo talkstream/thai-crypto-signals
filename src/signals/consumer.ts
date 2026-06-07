@@ -4,20 +4,29 @@ import type { ObservabilitySink } from '../domain/ports';
 import type { Notifier } from './notifier';
 
 /** Bound a pathological job so an oversized body is dropped, not 4xx-looped against a channel. */
-const MAX_SYMBOLS_PER_JOB = 2000;
+const MAX_MOVERS_PER_JOB = 2000;
 const MIN_RETRY_S = 5; // floor a transient retry so a flapping endpoint isn't hammered
 const MAX_RETRY_S = 86_400; // the queue's delaySeconds ceiling (24h)
 /** JS Date range ceiling (ms); beyond this, Intl date formatting throws RangeError. */
 const MAX_EPOCH_MS = 8_640_000_000_000_000;
+/** Cap the price decimal scale: `Number.toFixed(scale)` throws RangeError above 100; real scales are ≤10. */
+const MAX_PRICE_SCALE = 20;
+
+const MoverSchema = z.object({
+  symbol: z.string().max(64),
+  changeBp: z.number().int(), // signed: positive = up, negative = down
+  priceMinor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  scale: z.number().int().min(0).max(MAX_PRICE_SCALE),
+});
 
 const SignalJobSchema = z.object({
   // Constrain to a valid epoch-ms integer: a non-finite OR out-of-Date-range bucketTs would otherwise
   // throw in Intl date formatting (RangeError) or make a garbage retry key — a permanently invalid
   // body that would loop on retry instead of being dropped here as invalid.
   bucketTs: z.number().int().min(0).max(MAX_EPOCH_MS),
-  symbols: z.array(z.string()).max(MAX_SYMBOLS_PER_JOB),
+  movers: z.array(MoverSchema).max(MAX_MOVERS_PER_JOB),
   producedAt: z.number().int().min(0).max(MAX_EPOCH_MS),
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
 });
 
 /** Coerce an upstream retry hint to a positive integer within the queue's [MIN, MAX] delay bounds. */

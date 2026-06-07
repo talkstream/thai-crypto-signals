@@ -21,8 +21,9 @@ import type {
 } from '../domain/ports';
 import { parseDecimalToMinor, pctToBasisPoints, rescaleMinor } from '../domain/price';
 import type { MarketSymbol, RunRecord, TickerSnapshot } from '../domain/types';
-import { pctChangeFires } from '../signals/indicators';
+import { pctChangeFires, percentChangeBp } from '../signals/indicators';
 import { enqueueSignalJob } from '../signals/producer';
+import type { Mover } from '../signals/types';
 
 const LATEST_KEY = 'latest:v1';
 
@@ -40,6 +41,8 @@ export interface CollectDeps {
   signalsEnabled: boolean;
   /** Signal rule threshold in basis points: a symbol moving >= this vs the prior bucket is a mover. */
   signalThresholdBp: number;
+  /** Optional symbol allow-list: when non-empty, only these symbols can be movers (empty = all). */
+  signalWatchlist: ReadonlySet<string>;
 }
 
 function fetchErrorStatus(e: unknown): string {
@@ -157,6 +160,7 @@ export async function collect(deps: CollectDeps): Promise<void> {
     dispatcher,
     signalsEnabled,
     signalThresholdBp,
+    signalWatchlist,
   } = deps;
   const startedMs = clock.now();
 
@@ -216,7 +220,7 @@ export async function collect(deps: CollectDeps): Promise<void> {
   // 5. Per-entry mapping (one bad entry never discards the tick).
   const snapshots: TickerSnapshot[] = [];
   const latest: LatestEntryDto[] = [];
-  const movers: string[] = []; // symbols that fired the pct-change rule this bucket (the signal)
+  const movers: Mover[] = []; // symbols that fired the pct-change rule this bucket (the signal)
   let driftCount = 0;
   let scaleOverflowCount = 0;
   const seen = new Set<number>();
@@ -259,9 +263,20 @@ export async function collect(deps: CollectDeps): Promise<void> {
             { last: Number(snapshot.lastMinor), prior: Number(priorNorm) },
           );
         }
-        // Signal rule: a symbol that moved >= the threshold vs the prior bucket is a mover.
-        if (thresholdValid && pctChangeFires(snapshot.lastMinor, priorNorm, signalThresholdBp)) {
-          movers.push(entry.symbol);
+        // Signal rule: a symbol that moved >= the threshold vs the prior bucket is a mover. With a
+        // watchlist configured, only its symbols qualify (empty watchlist = all symbols). The mover
+        // carries direction/percent/price so the delivery message renders without re-deriving.
+        if (
+          thresholdValid &&
+          (signalWatchlist.size === 0 || signalWatchlist.has(entry.symbol)) &&
+          pctChangeFires(snapshot.lastMinor, priorNorm, signalThresholdBp)
+        ) {
+          movers.push({
+            symbol: entry.symbol,
+            changeBp: percentChangeBp(snapshot.lastMinor, priorNorm),
+            priceMinor: Number(snapshot.lastMinor),
+            scale: sym.priceScale,
+          });
         }
       }
     }
@@ -323,7 +338,7 @@ export async function collect(deps: CollectDeps): Promise<void> {
         await enqueueSignalJob(
           dispatcher,
           signalsEnabled,
-          { bucketTs, symbols: movers, producedAt: finishedMs, schemaVersion: 1 },
+          { bucketTs, movers, producedAt: finishedMs, schemaVersion: 2 },
           obs,
         );
       } catch (e) {

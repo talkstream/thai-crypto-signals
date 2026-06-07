@@ -8,7 +8,12 @@ import type { SignalJob } from '../../src/signals/types';
 describe('QueueDispatcher', () => {
   it('sends the job to the bound producer queue', async () => {
     const dispatcher = new QueueDispatcher(env.SIGNALS_QUEUE);
-    const job: SignalJob = { bucketTs: 1, symbols: ['BTC_THB'], producedAt: 2, schemaVersion: 1 };
+    const job: SignalJob = {
+      bucketTs: 1,
+      movers: [{ symbol: 'BTC_THB', changeBp: 342, priceMinor: 100, scale: 2 }],
+      producedAt: 2,
+      schemaVersion: 2,
+    };
     // Miniflare's Queue.send() exposes no read-back API in the test pool, so we assert no exception
     // (= the send was accepted by the runtime); the payload round-trip is covered by the consumer test.
     await expect(dispatcher.enqueue(job)).resolves.toBeUndefined();

@@ -15,7 +15,7 @@ export async function enqueueSignalJob(
   obs: ObservabilitySink,
 ): Promise<boolean> {
   if (!signalsEnabled) {
-    safeEvent(obs, 'signal_intent', {}, { symbols: job.symbols.length });
+    safeEvent(obs, 'signal_intent', {}, { movers: job.movers.length });
     return false;
   }
   await dispatcher.enqueue(job);

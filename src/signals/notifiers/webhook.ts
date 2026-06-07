@@ -39,7 +39,7 @@ export class WebhookNotifier implements Notifier {
     if (!this.cfg) return R.skipped();
     const body = JSON.stringify({
       bucketTs: job.bucketTs,
-      symbols: job.symbols,
+      movers: job.movers,
       producedAt: job.producedAt,
       schemaVersion: job.schemaVersion,
       text: formatSignalMessage(job),

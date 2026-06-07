@@ -13,6 +13,7 @@ import { rollup } from './collector/rollup-job';
 import { cronExprFor } from './config/cadence';
 import type { Fetcher } from './domain/ports';
 import { consumeSignals } from './signals/consumer';
+import { parseWatchlist } from './signals/watchlist';
 import { buildNotifier } from './signals/wiring';
 
 const ROLLUP_CRON = '17 * * * *';
@@ -77,6 +78,7 @@ export function makeWorker(wiring: WorkerWiring) {
           dispatcher: new QueueDispatcher(env.SIGNALS_QUEUE),
           signalsEnabled: String(env.SIGNALS_ENABLED) === 'true',
           signalThresholdBp: Number(env.SIGNAL_PCT_THRESHOLD_BP),
+          signalWatchlist: parseWatchlist(env.SIGNAL_WATCHLIST),
         });
       }
     },

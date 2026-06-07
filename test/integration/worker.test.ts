@@ -90,7 +90,12 @@ describe('worker fetch', () => {
 });
 
 describe('worker queue (signals delivery)', () => {
-  const JOB = { bucketTs: 1, symbols: ['BTC_THB'], producedAt: 2, schemaVersion: 1 };
+  const JOB = {
+    bucketTs: 1,
+    movers: [{ symbol: 'BTC_THB', changeBp: 342, priceMinor: 100, scale: 2 }],
+    producedAt: 2,
+    schemaVersion: 2,
+  };
 
   function oneMessageBatch(body: unknown) {
     const calls = { acked: 0, retried: 0 };

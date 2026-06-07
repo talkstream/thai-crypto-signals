@@ -3,7 +3,12 @@ import type { SignalJob } from '../../src/signals/types';
 import { buildNotifier } from '../../src/signals/wiring';
 import { InMemoryObservabilitySink, recordingFetcher } from '../helpers/fakes';
 
-const JOB: SignalJob = { bucketTs: 1, symbols: ['BTC_THB'], producedAt: 2, schemaVersion: 1 };
+const JOB: SignalJob = {
+  bucketTs: 1,
+  movers: [{ symbol: 'BTC_THB', changeBp: 342, priceMinor: 100, scale: 2 }],
+  producedAt: 2,
+  schemaVersion: 2,
+};
 
 // Only the secret fields matter to buildNotifier; cast a partial object to Env (the real bindings are
 // irrelevant here). No mock: delivery goes through an injected recording Fetcher.

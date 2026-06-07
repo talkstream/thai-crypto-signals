@@ -1,35 +1,56 @@
 import { describe, expect, it } from 'vitest';
 import { formatSignalMessage, lineRetryKey } from '../../src/signals/format';
-import type { SignalJob } from '../../src/signals/types';
+import type { Mover, SignalJob } from '../../src/signals/types';
 
-const job = (over: Partial<SignalJob> = {}): SignalJob => ({
-  bucketTs: 1_700_000_040_000,
-  symbols: ['BTC_THB', 'ETH_THB'],
-  producedAt: 1,
-  schemaVersion: 1,
+const BUCKET = 1_700_000_040_000; // ICT (Asia/Bangkok, no DST) == 2023-11-15 05:14, independently computed
+const HEADER = 'TCS · 2023-11-15 05:14 ICT';
+const mover = (over: Partial<Mover> = {}): Mover => ({
+  symbol: 'TON_THB',
+  changeBp: 342,
+  priceMinor: 10_000,
+  scale: 2,
   ...over,
+});
+const job = (movers: Mover[]): SignalJob => ({
+  bucketTs: BUCKET,
+  movers,
+  producedAt: 1,
+  schemaVersion: 2,
 });
 
 describe('formatSignalMessage', () => {
-  it('names the movers with the bucket time in ICT', () => {
-    // ICT (Asia/Bangkok, no DST) of 1_700_000_040_000 == 2023-11-15 05:14, independently computed.
-    expect(formatSignalMessage(job())).toBe(
-      'TCS signal 2023-11-15 05:14 ICT — 2 symbols moved: BTC_THB, ETH_THB',
+  it('renders an up mover with a green marker, base symbol, signed %, and ฿ price', () => {
+    expect(formatSignalMessage(job([mover()]))).toBe(`${HEADER}\n🟢 TON +3.42%  ฿100.00`);
+  });
+
+  it('renders a down mover with a red marker and a negative %', () => {
+    expect(formatSignalMessage(job([mover({ changeBp: -310, priceMinor: 9_680 })]))).toBe(
+      `${HEADER}\n🔴 TON -3.10%  ฿96.80`,
     );
   });
 
-  it('singularises "symbol" for exactly one mover', () => {
-    expect(formatSignalMessage(job({ symbols: ['BTC_THB'] }))).toBe(
-      'TCS signal 2023-11-15 05:14 ICT — 1 symbol moved: BTC_THB',
+  it('strips the quote and renders the price at the pair scale', () => {
+    expect(
+      formatSignalMessage(
+        job([mover({ symbol: 'BTC_THB', changeBp: 500, priceMinor: 2_400_000, scale: 0 })]),
+      ),
+    ).toBe(`${HEADER}\n🟢 BTC +5.00%  ฿2400000`);
+  });
+
+  it('lists one line per mover', () => {
+    const msg = formatSignalMessage(
+      job([mover(), mover({ symbol: 'ETH_THB', changeBp: -400, priceMinor: 8_000_000, scale: 2 })]),
     );
+    expect(msg).toBe(`${HEADER}\n🟢 TON +3.42%  ฿100.00\n🔴 ETH -4.00%  ฿80000.00`);
   });
 
   it('caps the listed movers with a "+N more" tail', () => {
-    const symbols = Array.from({ length: 14 }, (_, i) => `S${i + 1}_THB`);
-    const msg = formatSignalMessage(job({ symbols }));
-    expect(msg).toContain('— 14 symbols moved: S1_THB, S2_THB,');
-    expect(msg).toContain('S12_THB, +2 more');
-    expect(msg).not.toContain('S13_THB'); // beyond the cap, only counted
+    const movers = Array.from({ length: 14 }, (_, i) => mover({ symbol: `S${i + 1}_THB` }));
+    const msg = formatSignalMessage(job(movers));
+    expect(msg).toContain('🟢 S1 +3.42%');
+    expect(msg).toContain('🟢 S12 +3.42%');
+    expect(msg).toContain('… +2 more');
+    expect(msg).not.toContain('S13'); // beyond the cap, only counted
   });
 });
 

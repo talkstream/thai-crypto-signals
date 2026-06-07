@@ -7,9 +7,9 @@ import { InMemoryObservabilitySink, InMemorySignalDispatcher } from '../helpers/
 // in-memory port double at the queue edge (like InMemoryCacheWriter), our producer runs for real.
 const job: SignalJob = {
   bucketTs: 1_700_000_040_000,
-  symbols: ['BTC_THB'],
+  movers: [{ symbol: 'BTC_THB', changeBp: 342, priceMinor: 100, scale: 2 }],
   producedAt: 1,
-  schemaVersion: 1,
+  schemaVersion: 2,
 };
 
 describe('enqueueSignalJob', () => {

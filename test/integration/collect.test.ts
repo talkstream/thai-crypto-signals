@@ -102,6 +102,7 @@ function makeDeps(over: Partial<CollectDeps> = {}): CollectDeps {
     dispatcher: new InMemorySignalDispatcher(),
     signalsEnabled: false,
     signalThresholdBp: 300, // 3% — a symbol moving >= this vs the prior bucket is a mover
+    signalWatchlist: new Set<string>(), // empty = all symbols (no filtering) by default
     ...over,
   };
 }
@@ -505,9 +506,30 @@ describe('collect — signals producer wiring (movers only, DARK by default)', (
     expect(dispatcher.jobs.length).toBe(1);
     const job = dispatcher.jobs[0];
     expect(job?.bucketTs).toBe(BUCKET);
-    expect(job?.schemaVersion).toBe(1);
+    expect(job?.schemaVersion).toBe(2);
     expect(job?.producedAt).toBe(SERVER_MS); // finishedMs from the FakeClock(SERVER_MS)
-    expect(job?.symbols).toEqual(['BTC_THB']); // only the mover, ETH (flat) excluded
+    // only the mover (ETH flat -> excluded), carried with direction/percent/price detail
+    expect(job?.movers).toEqual([
+      { symbol: 'BTC_THB', changeBp: 10170, priceMinor: 201_705_088, scale: 2 },
+    ]);
+  });
+
+  it('respects the watchlist — only watchlisted symbols can be movers', async () => {
+    await seedSymbols([symbolEntry(), symbolEntry({ symbol: 'ETH_THB', base_asset: 'ETH' })]);
+    await seedPriorSnapshot('BTC_THB', 100_000_000); // BTC moves big (a mover by the threshold)
+    await seedPriorSnapshot('ETH_THB', 3_500_000); // ETH 35,000 -> 70,000 (+100%) -> also a mover
+    routeFetch({
+      ticker: () =>
+        Response.json([tickerEntry(), tickerEntry({ symbol: 'ETH_THB', last: '70000' })]),
+    });
+    const dispatcher = new InMemorySignalDispatcher();
+    await collect(
+      makeDeps({ dispatcher, signalsEnabled: true, signalWatchlist: new Set(['ETH_THB']) }),
+    );
+
+    expect(dispatcher.jobs.length).toBe(1);
+    // BTC moved too, but the watchlist allows only ETH -> BTC is excluded.
+    expect(dispatcher.jobs[0]?.movers.map((m) => m.symbol)).toEqual(['ETH_THB']);
   });
 
   it('does NOT enqueue when no symbol moved enough', async () => {

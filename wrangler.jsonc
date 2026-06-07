@@ -18,10 +18,13 @@
     "TICKER_TIMEOUT_MS": "8000",
     "SYMBOL_MAP_TTL_MS": "600000",
     "ROLLUP_MAX_WINDOWS": "48",
-    "SIGNALS_ENABLED": "false",
+    "SIGNALS_ENABLED": "true",
     // Signal rule: a symbol moving >= this many basis points (300 = 3%) vs the prior bucket is a
     // "mover". A tick with no movers emits no signal. Lower = more signals (noisier).
-    "SIGNAL_PCT_THRESHOLD_BP": "300"
+    "SIGNAL_PCT_THRESHOLD_BP": "300",
+    // Watchlist: comma-separated symbols allowed to fire a signal (empty = all symbols). Scoping to a
+    // few symbols keeps delivery volume low (well within the LINE free-tier message quota).
+    "SIGNAL_WATCHLIST": "TON_THB"
   },
 
   "d1_databases": [
@@ -38,8 +41,8 @@
   "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "tcs_metrics" }],
 
   // Phase-2 signals: the producer is wired into the collect path and QueueDispatcher is instantiated
-  // in src/index.ts, so the queue IS fed when SIGNALS_ENABLED is "true". The committed default below
-  // is "false", so by config the queue stays unfed until signals are activated. See src/signals.
+  // in src/index.ts, so the queue IS fed when SIGNALS_ENABLED is "true" (now LIVE), scoped by
+  // SIGNAL_WATCHLIST to a few symbols. The kill switch gates both produce and consume. See src/signals.
   "queues": {
     "producers": [{ "binding": "SIGNALS_QUEUE", "queue": "tcs-signals" }],
     "consumers": [

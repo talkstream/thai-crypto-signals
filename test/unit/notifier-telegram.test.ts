@@ -6,9 +6,12 @@ import { InMemoryObservabilitySink, recordingFetcher } from '../helpers/fakes';
 
 const JOB: SignalJob = {
   bucketTs: 1_700_000_040_000,
-  symbols: ['BTC_THB', 'ETH_THB'],
+  movers: [
+    { symbol: 'BTC_THB', changeBp: 342, priceMinor: 250_000_000, scale: 2 },
+    { symbol: 'ETH_THB', changeBp: -410, priceMinor: 12_000_000, scale: 2 },
+  ],
   producedAt: 1,
-  schemaVersion: 1,
+  schemaVersion: 2,
 };
 const CFG = { botToken: 'T0KEN', chatId: '775707' };
 
@@ -32,7 +35,9 @@ describe('TelegramNotifier', () => {
     expect(new Headers(seen?.init?.headers).get('content-type')).toBe('application/json');
     const body = JSON.parse(String(seen?.init?.body)) as Record<string, unknown>;
     expect(body.chat_id).toBe('775707');
-    expect(body.text).toBe('TCS signal 2023-11-15 05:14 ICT — 2 symbols moved: BTC_THB, ETH_THB');
+    expect(body.text).toBe(
+      'TCS · 2023-11-15 05:14 ICT\n🟢 BTC +3.42%  ฿2500000.00\n🔴 ETH -4.10%  ฿120000.00',
+    );
     expect('parse_mode' in body).toBe(false); // literal text, injection-safe
   });
 

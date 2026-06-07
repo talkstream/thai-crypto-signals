@@ -6,9 +6,12 @@ import { recordingFetcher } from '../helpers/fakes';
 
 const JOB: SignalJob = {
   bucketTs: 1_700_000_040_000,
-  symbols: ['BTC_THB', 'ETH_THB'],
+  movers: [
+    { symbol: 'BTC_THB', changeBp: 342, priceMinor: 250_000_000, scale: 2 },
+    { symbol: 'ETH_THB', changeBp: -410, priceMinor: 12_000_000, scale: 2 },
+  ],
   producedAt: 42,
-  schemaVersion: 1,
+  schemaVersion: 2,
 };
 const CFG = { url: 'https://example.test/hook', signingSecret: 's3cr3t' };
 
@@ -49,7 +52,8 @@ describe('WebhookNotifier', () => {
     const sentBody = String(seen?.init?.body);
     const parsed = JSON.parse(sentBody) as Record<string, unknown>;
     expect(parsed.bucketTs).toBe(JOB.bucketTs); // receiver can dedupe on bucketTs
-    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.schemaVersion).toBe(2);
+    expect(parsed.movers).toEqual(JOB.movers); // structured payload (not a bare symbol list)
 
     const header = new Headers(seen?.init?.headers).get('x-tcs-signature');
     expect(header).toBe(`sha256=${await hmacHex(CFG.signingSecret, sentBody)}`);

@@ -7,9 +7,9 @@ import { recordingFetcher } from '../helpers/fakes';
 
 const JOB: SignalJob = {
   bucketTs: 1_700_000_040_000,
-  symbols: ['BTC_THB'],
+  movers: [{ symbol: 'BTC_THB', changeBp: 342, priceMinor: 250_000_000, scale: 2 }],
   producedAt: 1,
-  schemaVersion: 1,
+  schemaVersion: 2,
 };
 const CFG = { channelAccessToken: 'CHTOKEN', targetId: 'Udeadbeef' };
 
@@ -40,7 +40,7 @@ describe('LineNotifier', () => {
     };
     expect(body.to).toBe('Udeadbeef');
     expect(body.messages).toEqual([
-      { type: 'text', text: 'TCS signal 2023-11-15 05:14 ICT — 1 symbol moved: BTC_THB' },
+      { type: 'text', text: 'TCS · 2023-11-15 05:14 ICT\n🟢 BTC +3.42%  ฿2500000.00' },
     ]);
   });
 
