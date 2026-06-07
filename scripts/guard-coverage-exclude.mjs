@@ -13,7 +13,6 @@ const EXPECTED = [
   'worker-configuration.d.ts',
   'test/**',
   'src/signals/indicators.ts',
-  'src/signals/notifier.ts',
 ];
 
 const config = readFileSync('vitest.config.ts', 'utf8');

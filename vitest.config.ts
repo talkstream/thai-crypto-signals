@@ -24,7 +24,6 @@ export default defineConfig({
         'worker-configuration.d.ts',
         'test/**',
         'src/signals/indicators.ts',
-        'src/signals/notifier.ts',
       ],
       thresholds: { statements: 100, branches: 100, functions: 100, lines: 100 },
     },
