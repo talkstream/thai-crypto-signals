@@ -19,8 +19,10 @@ type Extends<A extends B, B> = A;
 /** The production dispatcher must remain a {@link SignalDispatcher}. */
 export type DispatcherHonoursPort = Extends<QueueDispatcher, SignalDispatcher>;
 
-/** The frozen wire shape: one batched job per tick (keeps queue ops tiny — see types.ts). */
-export type JobShapeIsFrozen = Extends<
-  SignalJob,
-  { bucketTs: number; symbols: string[]; producedAt: number; schemaVersion: 1 }
->;
+/**
+ * The frozen wire shape: one batched job per tick (keeps queue ops tiny — see types.ts). Asserted
+ * EXACTLY in BOTH directions, so a missing, changed, OR extra field on SignalJob fails typecheck.
+ */
+type FrozenJob = { bucketTs: number; symbols: string[]; producedAt: number; schemaVersion: 1 };
+export type JobHasNoExtraFields = Extends<SignalJob, FrozenJob>;
+export type JobHasEveryField = Extends<FrozenJob, SignalJob>;

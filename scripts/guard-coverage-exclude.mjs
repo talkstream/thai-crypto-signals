@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Guard: the coverage exclude list must stay EXACTLY these entries, so coverage can never be
-// silently widened to hide untested code. The signals/** entries carve out the DORMANT phase-2
-// scaffold (no producer wired, nothing delivered) — a deliberate, reviewed exclusion documented in
-// vitest.config.ts and the signals file headers, verified instead by the type system. Changing this
-// list requires editing this guard too, which is the point: no silent widening.
+// silently widened to hide untested code. The signals entries carve out only the genuinely DEAD
+// producer-side scaffold (zero runtime callers, frozen phase-2, type-checked via
+// src/signals/contract.ts). The LIVE consumer (src/signals/consumer.ts) is intentionally NOT here —
+// it is covered by a real test. Changing this list requires editing this guard too: no silent widening.
 
 import { readFileSync } from 'node:fs';
 
@@ -12,8 +12,10 @@ const EXPECTED = [
   'src/spike/**',
   'worker-configuration.d.ts',
   'test/**',
-  'src/signals/**',
-  'src/adapters/signals/**',
+  'src/signals/producer.ts',
+  'src/signals/indicators.ts',
+  'src/signals/notifier.ts',
+  'src/adapters/signals/queue-dispatcher.ts',
 ];
 
 const config = readFileSync('vitest.config.ts', 'utf8');

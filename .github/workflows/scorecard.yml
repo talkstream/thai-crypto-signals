@@ -19,6 +19,10 @@ jobs:
     name: Scorecard analysis
     runs-on: ubuntu-latest
     permissions:
+      # Job-level permissions REPLACE the top-level read-all for this job, so the read scopes
+      # Scorecard's checks need must be listed explicitly alongside the OIDC token.
+      contents: read
+      actions: read
       id-token: write # publish results to the public Scorecard API (renders the badge)
     steps:
       - name: Checkout

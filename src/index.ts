@@ -86,10 +86,10 @@ export function makeWorker(wiring: WorkerWiring) {
       });
     },
 
-    /* istanbul ignore next -- DORMANT phase-2 queue consumer. Wired only to satisfy wrangler's
-       consumer binding; the producer is disconnected (src/signals is a frozen, type-checked
-       scaffold — see its header docs), so this handler is never invoked in production. It is
-       intentionally untested here and will be exercised in phase 2 when delivery is switched on. */
+    /* istanbul ignore next -- thin platform glue: unpacks the MessageBatch and builds the AE sink,
+       then delegates to consumeSignals, whose ack-and-drop logic IS covered by
+       test/unit/signals-consumer.test.ts. Ignored only because constructing a real MessageBatch
+       needs a runtime cast; the queue is never actually fed (the producer side is dormant phase-2). */
     async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
       consumeSignals(batch.messages, new AnalyticsEngineSink(env.METRICS));
     },

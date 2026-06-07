@@ -295,7 +295,7 @@ decorative** (run the commands from the repo root):
 
 | Standard / practice | Status | How to verify |
 |---|---|---|
-| Test coverage of the live code | ✅ 100% (446/196/90/411) | `pnpm test:coverage` — thresholds enforced in `vitest.config.ts` |
+| Test coverage of the live code | ✅ 100% (451/198/91/416) | `pnpm test:coverage` — thresholds enforced in `vitest.config.ts` |
 | No module mocks · real-infra tests | ✅ | no `vi.mock`/`vi.spyOn`/`vi.fn` **calls** (the names appear only in doc comments); D1+KV run for real (Miniflare); the exchange is an injected recorded-response `Fetcher` |
 | TypeScript strict | ✅ | `tsconfig.json` → `"strict": true`; `pnpm typecheck` (`tsgo --noEmit`) |
 | Lint + format (Biome) | ✅ | `pnpm check` — config in `biome.json` |

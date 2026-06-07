@@ -289,7 +289,7 @@ pnpm exec wrangler queues delete my-signals-dlq
 
 | มาตรฐาน / แนวปฏิบัติ | สถานะ | วิธีตรวจสอบ |
 |---|---|---|
-| ความครอบคลุมเทสต์ของโค้ดที่ใช้งานจริง | ✅ 100% (446/196/90/411) | `pnpm test:coverage` — เกณฑ์กำหนดใน `vitest.config.ts` |
+| ความครอบคลุมเทสต์ของโค้ดที่ใช้งานจริง | ✅ 100% (451/198/91/416) | `pnpm test:coverage` — เกณฑ์กำหนดใน `vitest.config.ts` |
 | ไม่ม็อกโมดูล · เทสต์บนโครงสร้างจริง | ✅ | ไม่มีการ **เรียกใช้** `vi.mock`/`vi.spyOn`/`vi.fn` เลย (ชื่อเหล่านี้ปรากฏแค่ในคอมเมนต์); D1+KV เป็นของจริง (Miniflare); ตัวแลกเปลี่ยนคือ `Fetcher` ที่ฉีดเข้ามาพร้อมคำตอบที่บันทึกไว้ |
 | TypeScript แบบ strict | ✅ | `tsconfig.json` → `"strict": true`; `pnpm typecheck` (`tsgo --noEmit`) |
 | Lint + format (Biome) | ✅ | `pnpm check` — คอนฟิกใน `biome.json` |

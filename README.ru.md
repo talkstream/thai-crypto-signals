@@ -286,7 +286,7 @@ pnpm exec wrangler queues delete my-signals-dlq
 
 | Стандарт / практика | Статус | Как проверить |
 |---|---|---|
-| Покрытие живого кода тестами | ✅ 100% (446/196/90/411) | `pnpm test:coverage` — пороги заданы в `vitest.config.ts` |
+| Покрытие живого кода тестами | ✅ 100% (451/198/91/416) | `pnpm test:coverage` — пороги заданы в `vitest.config.ts` |
 | Без моков модулей · тесты на настоящей инфраструктуре | ✅ | ни одного **вызова** `vi.mock`/`vi.spyOn`/`vi.fn` (имена встречаются только в комментариях); D1+KV поднимаются настоящие (Miniflare); биржа — инъектируемый `Fetcher` с записанными ответами |
 | Строгий TypeScript | ✅ | `tsconfig.json` → `"strict": true`; `pnpm typecheck` (`tsgo --noEmit`) |
 | Линт + формат (Biome) | ✅ | `pnpm check` — конфиг в `biome.json` |
