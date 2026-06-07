@@ -41,6 +41,7 @@ describe('WebhookNotifier', () => {
     const r = await notifier(f.fetcher).deliver(JOB);
 
     expect(r.delivered).toBe(1);
+    expect(r.nonIdempotentDelivered).toBe(0); // webhook receiver dedups on the signed bucketTs
     expect(seen?.url).toBe('https://example.test/hook');
     expect(seen?.init?.method).toBe('POST');
     expect(new Headers(seen?.init?.headers).get('content-type')).toBe('application/json');

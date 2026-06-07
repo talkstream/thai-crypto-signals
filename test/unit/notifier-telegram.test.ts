@@ -26,6 +26,7 @@ describe('TelegramNotifier', () => {
     const r = await notifier(f.fetcher).deliver(JOB);
 
     expect(r.delivered).toBe(1);
+    expect(r.nonIdempotentDelivered).toBe(1); // Telegram has no idempotency key
     expect(seen?.url).toBe('https://api.telegram.org/botT0KEN/sendMessage');
     expect(seen?.init?.method).toBe('POST');
     expect(new Headers(seen?.init?.headers).get('content-type')).toBe('application/json');

@@ -27,6 +27,7 @@ export class FanOutNotifier implements Notifier {
         const retryAfterSec = maxDefined(acc.retryAfterSec, r.retryAfterSec);
         const next: DeliveryResult = {
           delivered: acc.delivered + r.delivered,
+          nonIdempotentDelivered: acc.nonIdempotentDelivered + r.nonIdempotentDelivered,
           skipped: acc.skipped + r.skipped,
           permanentFailures: acc.permanentFailures + r.permanentFailures,
           transientFailures: acc.transientFailures + r.transientFailures,
@@ -38,6 +39,7 @@ export class FanOutNotifier implements Notifier {
       },
       {
         delivered: 0,
+        nonIdempotentDelivered: 0,
         skipped: 0,
         permanentFailures: 0,
         transientFailures: 0,

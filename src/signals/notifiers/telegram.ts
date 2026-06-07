@@ -50,7 +50,7 @@ export class TelegramNotifier implements Notifier {
       // retry could duplicate — mark ambiguous (the consumer will NOT retry).
       return R.ambiguous();
     }
-    if (res.ok) return R.delivered();
+    if (res.ok) return R.deliveredNonIdempotent(); // Telegram has no idempotency key — re-send dups
     if (res.status === 429) return R.transient(await telegramRetryAfter(res)); // rate-limited = not sent
     if (res.status >= 500) return R.ambiguous(); // server error: may have taken effect — do not retry-dup
     if (res.status === 401 || res.status === 403) {

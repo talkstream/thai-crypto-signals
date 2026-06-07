@@ -10,6 +10,10 @@ import type { SignalJob } from './types';
 export interface DeliveryResult {
   /** 2xx (or an idempotent replay, e.g. LINE 409). */
   delivered: number;
+  /** Of `delivered`, how many were on a NON-idempotent channel (Telegram) whose re-send on a queue
+   *  redelivery WOULD duplicate. When this is 0, a redelivery is safe (LINE retry-key + webhook
+   *  receiver-dedup absorb the re-sends), so the consumer may retry to recover a failed channel. */
+  nonIdempotentDelivered: number;
   /** Channel not configured (no secret) — nothing attempted. */
   skipped: number;
   /** 4xx (non-429): a malformed/forbidden request that will never succeed — do NOT retry. */

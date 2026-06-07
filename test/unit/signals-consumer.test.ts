@@ -8,6 +8,7 @@ import { InMemoryObservabilitySink } from '../helpers/fakes';
 // return a fixed DeliveryResult (DI, not vi.mock) so we drive the ack/retry decision deterministically.
 const RESULT: DeliveryResult = {
   delivered: 0,
+  nonIdempotentDelivered: 0,
   skipped: 0,
   permanentFailures: 0,
   transientFailures: 0,
@@ -82,9 +83,10 @@ describe('consumeSignals (deliver -> ack/retry)', () => {
     expect(m.retryOpts[0]).toBeUndefined();
   });
 
-  it('acks a partial result (a channel delivered + one transient) WITHOUT retrying — no duplicate', async () => {
+  it('RETRIES to recover a failed channel when only idempotent channels delivered (safe re-send)', async () => {
     const obs = new InMemoryObservabilitySink();
     const m = recorder(VALID);
+    // e.g. LINE delivered (retry-key) + webhook transient: redelivery dedups LINE and re-attempts webhook.
     await consumeSignals(
       [m.message],
       notifierReturning({ delivered: 1, transientFailures: 1, retryAfterSec: 30 }),
@@ -92,7 +94,24 @@ describe('consumeSignals (deliver -> ack/retry)', () => {
       true,
     );
 
-    expect(m.acked).toBe(1); // acked: retrying would re-send the already-delivered channel
+    expect(m.retried).toBe(1);
+    expect(m.acked).toBe(0);
+    expect(m.retryOpts[0]).toEqual({ delaySeconds: 30 });
+    expect(obs.events.some((e) => e.kind === 'signal_retry')).toBe(true);
+  });
+
+  it('acks a partial (signal_partial, no retry) when a NON-idempotent channel delivered', async () => {
+    const obs = new InMemoryObservabilitySink();
+    const m = recorder(VALID);
+    // Telegram delivered + another channel transient: retrying would DUPLICATE Telegram, so we ack.
+    await consumeSignals(
+      [m.message],
+      notifierReturning({ delivered: 1, nonIdempotentDelivered: 1, transientFailures: 1 }),
+      obs,
+      true,
+    );
+
+    expect(m.acked).toBe(1); // acked: a redelivery would re-send the already-delivered Telegram
     expect(m.retried).toBe(0);
     expect(obs.events.some((e) => e.kind === 'signal_partial')).toBe(true);
   });

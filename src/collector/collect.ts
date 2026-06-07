@@ -160,10 +160,10 @@ export async function collect(deps: CollectDeps): Promise<void> {
   } = deps;
   const startedMs = clock.now();
 
-  // A non-positive (or NaN, from a missing/garbage var) threshold disables signals SAFELY — no symbol
-  // can ever be a mover (`>` is false). Surface it when signals are meant to be on, so the misconfig
+  // A non-finite (NaN/Infinity, from a missing/garbage var) or non-positive threshold disables signals
+  // SAFELY — no symbol can ever be a mover. Surface it when signals are meant to be on, so the misconfig
   // is observable rather than silently dark.
-  const thresholdValid = signalThresholdBp > 0;
+  const thresholdValid = Number.isFinite(signalThresholdBp) && signalThresholdBp > 0;
   if (signalsEnabled && !thresholdValid) {
     safeEvent(obs, 'signal_config_invalid', { key: 'SIGNAL_PCT_THRESHOLD_BP' }, { count: 1 });
   }

@@ -9,6 +9,7 @@ const JOB: SignalJob = { bucketTs: 1, symbols: ['BTC_THB'], producedAt: 2, schem
 // the FanOut's summation + max-retryAfter logic in isolation.
 const base: DeliveryResult = {
   delivered: 0,
+  nonIdempotentDelivered: 0,
   skipped: 0,
   permanentFailures: 0,
   transientFailures: 0,

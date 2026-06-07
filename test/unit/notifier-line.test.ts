@@ -27,6 +27,7 @@ describe('LineNotifier', () => {
     const r = await notifier(f.fetcher).deliver(JOB);
 
     expect(r.delivered).toBe(1);
+    expect(r.nonIdempotentDelivered).toBe(0); // LINE retry-key makes re-sends idempotent
     expect(seen?.url).toBe('https://api.line.me/v2/bot/message/push');
     expect(seen?.init?.method).toBe('POST');
     const headers = new Headers(seen?.init?.headers);

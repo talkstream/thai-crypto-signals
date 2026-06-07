@@ -544,14 +544,20 @@ describe('collect — signals producer wiring (movers only, DARK by default)', (
     expect(dispatcher.jobs.length).toBe(0);
   });
 
-  it('surfaces an invalid threshold and stays dark (no signal)', async () => {
+  it('surfaces an invalid (non-finite) threshold and stays dark (no signal)', async () => {
     await seedSymbols();
     await seedPriorSnapshot('BTC_THB', 100_000_000); // BTC would move +101% under a valid threshold
     routeFetch({ ticker: () => Response.json([tickerEntry()]) });
     const dispatcher = new InMemorySignalDispatcher();
     const obs = new InMemoryObservabilitySink();
+    // Number("Infinity") / Number("1e309") -> Infinity: must be rejected, not silently dark.
     await collect(
-      makeDeps({ dispatcher, obs, signalsEnabled: true, signalThresholdBp: Number.NaN }),
+      makeDeps({
+        dispatcher,
+        obs,
+        signalsEnabled: true,
+        signalThresholdBp: Number.POSITIVE_INFINITY,
+      }),
     );
 
     expect(obs.events.some((e) => e.kind === 'signal_config_invalid')).toBe(true);
