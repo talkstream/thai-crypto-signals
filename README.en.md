@@ -160,11 +160,11 @@ pnpm test:coverage                                                   # run the t
 The test suite spins up a **real local D1 database and KV** (Miniflare) and runs our own code for
 real — no module is mocked (zero `vi.mock`/`vi.spyOn` in the whole suite). The one external
 boundary, the exchange, is **injected as a `fetcher` that replays recorded real responses** —
-contract replay, not invented behaviour. (The phase-2 signals **connectors** — producer, queue
-consumer, and the Telegram/LINE/webhook notifiers — are now live and fully tested; only the rule-eval
-scaffold `src/signals/indicators.ts` stays dormant, frozen and type-checked, see
-`src/signals/contract.ts`.) That is what "testing against real infrastructure" means, and why the
-suite catches real bugs.
+contract replay, not invented behaviour. (The **entire** phase-2 signals pipeline — producer, queue
+consumer, the Telegram/LINE/webhook notifiers, and the rule-eval (`src/signals/indicators.ts`) that
+gates emission on a price move — is now live and fully tested; nothing under `src/signals` is dormant,
+and the frozen wire shape is pinned in `src/signals/contract.ts`.) That is what "testing against real
+infrastructure" means, and why the suite catches real bugs.
 
 Now start the Worker locally and trigger one collect tick by hand:
 
@@ -266,13 +266,13 @@ Make the ideas your own. Each lists a difficulty and a hint.
 3. **(Medium)** Add a test for a new failure mode — say, the ticker returns HTTP 500. *Hint:* the
    only substituted boundary is the injected `fetcher` (a recorded-response `Fetcher` passed to
    `BitkubAdapter`); see `test/integration/collect.test.ts` for the pattern.
-4. **(Advanced)** The Telegram / LINE / webhook **connectors** are wired and delivering (gated by
-   `SIGNALS_ENABLED`), but with no rules yet every tick sends a collection *heartbeat*, not a
-   price-move signal. Add a rule in `src/signals/indicators.ts` (e.g. percent change vs the prior
-   bucket) and gate emission on it, so a message goes out only when a symbol moves more than X%.
-   *Hint:* the producer enqueues one `SignalJob` per non-overlap tick in `src/collector/collect.ts`;
-   evaluate the rule there and skip the enqueue when nothing fires. Channel secrets go in with
-   `pnpm exec wrangler secret put …`. Keep it respectful and rate-limited.
+4. **(Advanced)** The signal pipeline is complete: the producer emits only the symbols that moved at
+   least `SIGNAL_PCT_THRESHOLD_BP` (default 300 bp = 3%) versus the prior bucket, and the consumer fans
+   the signal out to Telegram / LINE / webhook. Add a **fourth delivery channel** (say Discord or Slack)
+   behind the `Notifier` port. *Hint:* copy one of `src/signals/notifiers/{telegram,line,webhook}.ts` —
+   each takes an injected `Fetcher` resolved at call time and returns a `DeliveryResult` — then wire it
+   into `buildNotifier` (`src/signals/wiring.ts`), gated on its own secret. Add a no-mock test with a
+   recorded-response `Fetcher`, like the others. Keep it respectful and rate-limited.
 
 ---
 
@@ -299,7 +299,7 @@ decorative** (run the commands from the repo root):
 
 | Standard / practice | Status | How to verify |
 |---|---|---|
-| Test coverage of the live code | ✅ 100% (576/259/118/518) | `pnpm test:coverage` — thresholds enforced in `vitest.config.ts` |
+| Test coverage of the live code | ✅ 100% (616/300/124/554) | `pnpm test:coverage` — thresholds enforced in `vitest.config.ts` |
 | No module mocks · real-infra tests | ✅ | no `vi.mock`/`vi.spyOn`/`vi.fn` **calls** (the names appear only in doc comments); D1+KV run for real (Miniflare); the exchange is an injected recorded-response `Fetcher` |
 | TypeScript strict | ✅ | `tsconfig.json` → `"strict": true`; `pnpm typecheck` (`tsgo --noEmit`) |
 | Lint + format (Biome) | ✅ | `pnpm check` — config in `biome.json` |

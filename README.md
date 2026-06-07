@@ -161,7 +161,7 @@ pnpm test:coverage                                                   # รัน
 
 ชุดทดสอบสร้าง **D1 และ KV จริงในเครื่อง** (Miniflare) และรันโค้ดของเราจริง ๆ — ไม่มีการ mock โมดูลใดเลย
 (ไม่มี `vi.mock`/`vi.spyOn` ทั้งชุด) ขอบเขตภายนอกเพียงจุดเดียวคือตัวแลกเปลี่ยน ซึ่ง**ถูกฉีดเข้ามาเป็น `fetcher`
-ที่เล่นคำตอบจริงที่บันทึกไว้** (contract replay ไม่ใช่พฤติกรรมที่กุขึ้น) ส่วน signals phase-2 connectors — producer, queue consumer, และตัวส่งแจ้งเตือน Telegram/LINE/webhook — ตอนนี้ทำงานจริงและผ่านการทดสอบครบถ้วนแล้ว มีเพียงโครงสร้าง rule-eval อย่าง `src/signals/indicators.ts` เท่านั้นที่ยังหลับอยู่ ถูกแช่แข็งและตรวจด้วยชนิดข้อมูลแทน ดู `src/signals/contract.ts` นี่คือความหมายของ
+ที่เล่นคำตอบจริงที่บันทึกไว้** (contract replay ไม่ใช่พฤติกรรมที่กุขึ้น) ส่วน signals pipeline ทั้งหมด — producer, queue consumer, ตัวส่งแจ้งเตือน Telegram/LINE/webhook และ rule-eval (`src/signals/indicators.ts`) ที่คุมการปล่อยสัญญาณด้วยเกณฑ์การเคลื่อนไหวของราคา — ตอนนี้ทำงานจริงและผ่านการทดสอบครบถ้วนแล้ว ไม่มีส่วนใดใน `src/signals` ที่ยังหลับอยู่ และรูปร่าง wire ที่แช่แข็งไว้ถูกยึดใน `src/signals/contract.ts` นี่คือความหมายของ
 "การทดสอบกับโครงสร้างจริง" และเป็นเหตุผลที่ชุดทดสอบจับ bug จริงได้
 
 ตอนนี้รัน Worker ในเครื่องและสั่งให้เก็บข้อมูล 1 รอบด้วยตัวเอง:
@@ -259,7 +259,7 @@ pnpm exec wrangler queues delete my-signals-dlq
    `src/collector/rollup-job.ts` อย่าลืมกฎ "หาร 60 ลงตัว" ตอนเลือกช่วง
 3. **(ปานกลาง)** เขียนเทสต์สำหรับกรณีล้มเหลวแบบใหม่ เช่น ticker คืน HTTP 500 *คำใบ้:* ขอบเขตเดียวที่ถูกแทนคือ
    `fetcher` ที่ฉีดเข้ามา (คำตอบที่บันทึกไว้ ส่งให้ `BitkubAdapter`) ดูตัวอย่างใน `test/integration/collect.test.ts`
-4. **(ขั้นสูง)** ตัวเชื่อม Telegram / LINE / webhook ถูกต่อเข้าและส่งข้อมูลได้จริงแล้ว (ควบคุมด้วย `SIGNALS_ENABLED`) แต่เนื่องจากยังไม่มีกฎใดเลย ทุก tick จึงส่งแค่ heartbeat ของการเก็บข้อมูล ไม่ใช่สัญญาณบอกราคาที่เคลื่อนไหว ให้เพิ่มกฎใน `src/signals/indicators.ts` (เช่น เปอร์เซ็นต์การเปลี่ยนแปลงเทียบกับ bucket ก่อนหน้า) และควบคุมการปล่อยสัญญาณด้วยกฎนั้น เพื่อให้ข้อความถูกส่งออกก็ต่อเมื่อราคาของสกุลเงินขยับเกิน X% เท่านั้น *คำใบ้:* producer จะ enqueue `SignalJob` หนึ่งรายการต่อ tick ที่ไม่ซ้อนทับกันใน `src/collector/collect.ts` ให้ประเมินกฎตรงนั้นและข้าม enqueue เมื่อไม่มีกฎใดทำงาน secret ใส่ด้วย `pnpm exec wrangler secret put …` ทำอย่างสุภาพและจำกัดอัตราการส่ง
+4. **(ขั้นสูง)** signal pipeline สมบูรณ์แล้ว: producer ปล่อยเฉพาะสัญลักษณ์ที่เคลื่อนไหวอย่างน้อย `SIGNAL_PCT_THRESHOLD_BP` (ค่าเริ่มต้น 300 bp = 3%) เทียบกับ bucket ก่อนหน้า และ consumer กระจายสัญญาณไปยัง Telegram / LINE / webhook ให้เพิ่มช่องทางการส่งที่สี่ (เช่น Discord หรือ Slack) ผ่าน port `Notifier` *คำใบ้:* คัดลอกจากไฟล์ใดไฟล์หนึ่งใน `src/signals/notifiers/{telegram,line,webhook}.ts` — แต่ละไฟล์รับ `Fetcher` ที่ฉีดเข้ามาซึ่งอ้างอิงถึงค่า ณ เวลาที่เรียกใช้ และคืนค่า `DeliveryResult` — จากนั้นเชื่อมต่อเข้า `buildNotifier` (`src/signals/wiring.ts`) โดยคุมด้วย secret ของตัวเอง เขียนเทสต์ no-mock โดยใช้ `Fetcher` ที่ส่งคืนการตอบสนองที่บันทึกไว้ล่วงหน้า เหมือนกับตัวอื่น ทำอย่างสุภาพและจำกัดอัตราการส่ง (rate-limit)
 
 ---
 
@@ -285,7 +285,7 @@ pnpm exec wrangler queues delete my-signals-dlq
 
 | มาตรฐาน / แนวปฏิบัติ | สถานะ | วิธีตรวจสอบ |
 |---|---|---|
-| ความครอบคลุมเทสต์ของโค้ดที่ใช้งานจริง | ✅ 100% (576/259/118/518) | `pnpm test:coverage` — เกณฑ์กำหนดใน `vitest.config.ts` |
+| ความครอบคลุมเทสต์ของโค้ดที่ใช้งานจริง | ✅ 100% (616/300/124/554) | `pnpm test:coverage` — เกณฑ์กำหนดใน `vitest.config.ts` |
 | ไม่ม็อกโมดูล · เทสต์บนโครงสร้างจริง | ✅ | ไม่มีการ **เรียกใช้** `vi.mock`/`vi.spyOn`/`vi.fn` เลย (ชื่อเหล่านี้ปรากฏแค่ในคอมเมนต์); D1+KV เป็นของจริง (Miniflare); ตัวแลกเปลี่ยนคือ `Fetcher` ที่ฉีดเข้ามาพร้อมคำตอบที่บันทึกไว้ |
 | TypeScript แบบ strict | ✅ | `tsconfig.json` → `"strict": true`; `pnpm typecheck` (`tsgo --noEmit`) |
 | Lint + format (Biome) | ✅ | `pnpm check` — คอนฟิกใน `biome.json` |
