@@ -13,6 +13,7 @@ import {
   FakeRng,
   InMemoryCacheWriter,
   InMemoryObservabilitySink,
+  InMemorySignalDispatcher,
   recordingFetcher,
 } from '../helpers/fakes';
 import { resetDb } from '../helpers/migrate';
@@ -98,6 +99,8 @@ function makeDeps(over: Partial<CollectDeps> = {}): CollectDeps {
     obs: new InMemoryObservabilitySink(),
     clock: new FakeClock(SERVER_MS),
     cadenceMinutes: CADENCE,
+    dispatcher: new InMemorySignalDispatcher(),
+    signalsEnabled: false,
     ...over,
   };
 }
@@ -468,5 +471,70 @@ describe('collect — best-effort sinks never fail the tick', () => {
     await expect(collect(makeDeps({ store: throwing }))).resolves.toBeUndefined();
     expect(await runStatus()).toBe('store_error');
     expect(await snapshotCount()).toBe(0);
+  });
+});
+
+describe('collect — signals producer wiring (DARK by default)', () => {
+  it('enqueues exactly one SignalJob on a successful non-overlap tick when enabled', async () => {
+    await seedSymbols([symbolEntry(), symbolEntry({ symbol: 'ETH_THB', base_asset: 'ETH' })]);
+    routeFetch({
+      ticker: () =>
+        Response.json([tickerEntry(), tickerEntry({ symbol: 'ETH_THB', last: '70000' })]),
+    });
+    const dispatcher = new InMemorySignalDispatcher();
+    await collect(makeDeps({ dispatcher, signalsEnabled: true }));
+
+    expect(dispatcher.jobs.length).toBe(1);
+    const job = dispatcher.jobs[0];
+    expect(job?.bucketTs).toBe(BUCKET);
+    expect(job?.schemaVersion).toBe(1);
+    expect(job?.producedAt).toBe(SERVER_MS); // finishedMs from the FakeClock(SERVER_MS)
+    expect([...(job?.symbols ?? [])].sort()).toEqual(['BTC_THB', 'ETH_THB']);
+  });
+
+  it('does NOT enqueue when signals are disabled (intent only)', async () => {
+    await seedSymbols();
+    routeFetch({ ticker: () => Response.json([tickerEntry()]) });
+    const dispatcher = new InMemorySignalDispatcher();
+    const obs = new InMemoryObservabilitySink();
+    await collect(makeDeps({ dispatcher, obs, signalsEnabled: false }));
+
+    expect(dispatcher.jobs.length).toBe(0);
+    expect(obs.events.some((e) => e.kind === 'signal_intent')).toBe(true);
+  });
+
+  it('does NOT enqueue on an overlap (duplicate-fire) tick', async () => {
+    await seedSymbols();
+    routeFetch({ ticker: () => Response.json([tickerEntry()]) });
+    await collect(makeDeps({ signalsEnabled: true })); // first writer
+    routeFetch({ ticker: () => Response.json([tickerEntry({ last: '9999999.99' })]) });
+    const dispatcher = new InMemorySignalDispatcher();
+    await collect(makeDeps({ dispatcher, signalsEnabled: true })); // duplicate fire -> overlap
+
+    expect(dispatcher.jobs.length).toBe(0);
+  });
+
+  it('does NOT enqueue when zero symbols were collected (all drift)', async () => {
+    await seedSymbols();
+    routeFetch({ ticker: () => Response.json([tickerEntry({ last: 'abc' })]) }); // -> drift, 0 rows
+    const dispatcher = new InMemorySignalDispatcher();
+    await collect(makeDeps({ dispatcher, signalsEnabled: true }));
+
+    expect(await runStatus()).toBe('drift');
+    expect(dispatcher.jobs.length).toBe(0);
+  });
+
+  it('swallows an enqueue failure (best-effort): the tick still commits', async () => {
+    await seedSymbols();
+    routeFetch({ ticker: () => Response.json([tickerEntry()]) });
+    const dispatcher = new InMemorySignalDispatcher();
+    dispatcher.throwOnEnqueue = true;
+    const obs = new InMemoryObservabilitySink();
+    await expect(
+      collect(makeDeps({ dispatcher, obs, signalsEnabled: true })),
+    ).resolves.toBeUndefined();
+
+    expect(await snapshotCount()).toBe(1); // tick committed despite the enqueue failure
+    expect(obs.events.some((e) => e.kind === 'signal_enqueue_failed')).toBe(true);
   });
 });

@@ -16,10 +16,12 @@ import type {
   CollectStore,
   MarketDataSource,
   ObservabilitySink,
+  SignalDispatcher,
   SymbolStore,
 } from '../domain/ports';
 import { parseDecimalToMinor, pctToBasisPoints, rescaleMinor } from '../domain/price';
 import type { MarketSymbol, RunRecord, TickerSnapshot } from '../domain/types';
+import { enqueueSignalJob } from '../signals/producer';
 
 const LATEST_KEY = 'latest:v1';
 
@@ -31,6 +33,10 @@ export interface CollectDeps {
   obs: ObservabilitySink;
   clock: Clock;
   cadenceMinutes: number;
+  /** Phase-2 signals: where to enqueue a per-tick SignalJob (DARK until SIGNALS_ENABLED). */
+  dispatcher: SignalDispatcher;
+  /** Flag-gate; the producer emits intent only (no enqueue) when false. */
+  signalsEnabled: boolean;
 }
 
 function fetchErrorStatus(e: unknown): string {
@@ -137,7 +143,17 @@ async function reportFailure(
 
 /** One collect tick: server-time-anchored bucket, per-entry mapping, one atomic batch. */
 export async function collect(deps: CollectDeps): Promise<void> {
-  const { marketData, symbols, store, cache, obs, clock, cadenceMinutes } = deps;
+  const {
+    marketData,
+    symbols,
+    store,
+    cache,
+    obs,
+    clock,
+    cadenceMinutes,
+    dispatcher,
+    signalsEnabled,
+  } = deps;
   const startedMs = clock.now();
 
   // 1. Symbol catalog (bootstrap on an empty DB).
@@ -277,6 +293,27 @@ export async function collect(deps: CollectDeps): Promise<void> {
       await cache.put(LATEST_KEY, JSON.stringify(payload), Math.max(60, cadenceMinutes * 60 * 5));
     } catch {
       // hot cache is non-authoritative; never fail the tick on a KV write
+    }
+
+    // 7b. Phase-2 signals: one batched job per successful non-overlap tick (all symbols in one
+    //     SignalJob — keeps queue ops tiny). DARK until SIGNALS_ENABLED; the flag-gate lives in the
+    //     producer. Enqueue is best-effort — a queue-send failure must never fail the committed tick.
+    if (latest.length > 0) {
+      try {
+        await enqueueSignalJob(
+          dispatcher,
+          signalsEnabled,
+          {
+            bucketTs,
+            symbols: latest.map((e) => e.symbol),
+            producedAt: finishedMs,
+            schemaVersion: 1,
+          },
+          obs,
+        );
+      } catch (e) {
+        safeEvent(obs, 'signal_enqueue_failed', { err: errMessage(e) }, { count: 1 });
+      }
     }
   }
 

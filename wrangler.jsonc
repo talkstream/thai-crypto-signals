@@ -34,10 +34,9 @@
 
   "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "tcs_metrics" }],
 
-  // DORMANT phase-2 signals scaffold: the producer/consumer/DLQ bindings exist so phase 2 grafts
-  // without rework. The producer (enqueueSignalJob) has NO runtime caller and QueueDispatcher is
-  // never instantiated, so .send is never called and the queue is structurally unfed in production
-  // — a wiring fact, not a runtime SIGNALS_ENABLED check. See src/signals (frozen, type-checked).
+  // Phase-2 signals: the producer is wired into the collect path and QueueDispatcher is instantiated
+  // in src/index.ts, so the queue IS fed when SIGNALS_ENABLED is "true". The committed default below
+  // is "false", so by config the queue stays unfed until signals are activated. See src/signals.
   "queues": {
     "producers": [{ "binding": "SIGNALS_QUEUE", "queue": "tcs-signals" }],
     "consumers": [

@@ -12,10 +12,8 @@ const EXPECTED = [
   'src/spike/**',
   'worker-configuration.d.ts',
   'test/**',
-  'src/signals/producer.ts',
   'src/signals/indicators.ts',
   'src/signals/notifier.ts',
-  'src/adapters/signals/queue-dispatcher.ts',
 ];
 
 const config = readFileSync('vitest.config.ts', 'utf8');

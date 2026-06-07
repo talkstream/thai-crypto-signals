@@ -1,15 +1,15 @@
 /**
- * Compile-time contract for the DORMANT producer-side signals scaffold.
+ * Compile-time contract for the signals wire shape and dispatcher port.
  *
- * The producer side (producer, dispatcher/adapter, indicators, notifier) is a frozen phase-2 scaffold
- * with ZERO runtime callers — nothing is ever delivered. Rather than exercise dead code with fakes,
- * it is carved out of COVERAGE (vitest.config.ts) — but still fully TYPE-CHECKED by `tsgo --noEmit`
- * on every build (the typecheck excludes nothing). This file makes that guarantee explicit: static
- * assertions that the scaffold still honours its frozen ports, so the compiler (and CI) fail the
- * moment it drifts. No runtime, no mocks — the dead scaffold is "verified another way".
+ * Phase 2 wired the producer side live: the producer (enqueueSignalJob) is called from the collect
+ * path and QueueDispatcher is instantiated in src/index.ts — both are now IN coverage and tested.
+ * The only still-dormant piece is the rule-eval scaffold (src/signals/indicators.ts), a later
+ * sub-phase carved out of COVERAGE but still fully TYPE-CHECKED by `tsgo --noEmit` (the typecheck
+ * excludes nothing).
  *
- * The CONSUMER (src/signals/consumer.ts) is the live-but-dark exception: it IS wired into the
- * worker's queue() handler, kept IN coverage, and tested in test/unit/signals-consumer.test.ts.
+ * This file freezes the contract regardless of coverage: static assertions that the wire shape
+ * (SignalJob) and the dispatcher port have not drifted, so the compiler (and CI) fail the moment
+ * they do. No runtime, no mocks — the invariants are "verified another way".
  */
 import type { QueueDispatcher } from '../adapters/signals/queue-dispatcher';
 import type { SignalDispatcher } from '../domain/ports';

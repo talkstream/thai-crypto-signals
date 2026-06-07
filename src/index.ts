@@ -1,6 +1,7 @@
 import { BitkubAdapter } from './adapters/bitkub/client';
 import { AnalyticsEngineSink } from './adapters/observability/metrics';
 import { SystemClock, SystemRng } from './adapters/runtime';
+import { QueueDispatcher } from './adapters/signals/queue-dispatcher';
 import { KvCacheWriter } from './adapters/storage/cache-writer';
 import { D1CollectStore } from './adapters/storage/collect-store';
 import { D1ReadStore } from './adapters/storage/read-store';
@@ -72,6 +73,8 @@ export function makeWorker(wiring: WorkerWiring) {
           obs,
           clock,
           cadenceMinutes: cadence,
+          dispatcher: new QueueDispatcher(env.SIGNALS_QUEUE),
+          signalsEnabled: String(env.SIGNALS_ENABLED) === 'true',
         });
       }
     },
@@ -87,9 +90,9 @@ export function makeWorker(wiring: WorkerWiring) {
     },
 
     /* istanbul ignore next -- thin platform glue: unpacks the MessageBatch and builds the AE sink,
-       then delegates to consumeSignals, whose ack-and-drop logic IS covered by
-       test/unit/signals-consumer.test.ts. Ignored only because constructing a real MessageBatch
-       needs a runtime cast; the queue is never actually fed (the producer side is dormant phase-2). */
+       then delegates to consumeSignals, whose logic IS covered by test/unit/signals-consumer.test.ts.
+       Ignored only because constructing a real MessageBatch needs a runtime cast. (The producer is
+       wired in collect; the queue is fed when SIGNALS_ENABLED is true.) */
     async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
       consumeSignals(batch.messages, new AnalyticsEngineSink(env.METRICS));
     },

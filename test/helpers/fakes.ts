@@ -15,7 +15,9 @@ import type {
   ObsDoubles,
   ObservabilitySink,
   Rng,
+  SignalDispatcher,
 } from '../../src/domain/ports';
+import type { SignalJob } from '../../src/signals/types';
 
 /** Deterministic injected clock; records sleeps instead of waiting. */
 export class FakeClock implements Clock {
@@ -62,6 +64,16 @@ export class InMemoryCacheWriter implements CacheWriter {
   async put(key: string, value: string, _ttlSeconds?: number): Promise<void> {
     if (this.throwOnPut) throw new Error('KV unavailable');
     this.store.set(key, value);
+  }
+}
+
+/** In-memory SignalDispatcher; records enqueued jobs and can be told to reject (best-effort path). */
+export class InMemorySignalDispatcher implements SignalDispatcher {
+  readonly jobs: SignalJob[] = [];
+  throwOnEnqueue = false;
+  async enqueue(job: SignalJob): Promise<void> {
+    if (this.throwOnEnqueue) throw new Error('queue unavailable');
+    this.jobs.push(job);
   }
 }
 
