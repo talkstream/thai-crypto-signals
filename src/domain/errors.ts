@@ -73,11 +73,3 @@ export class BitkubHttpError extends Error {
     this.name = 'BitkubHttpError';
   }
 }
-
-export class NotImplementedError extends Error {
-  readonly tag = 'NotImplemented' as const;
-  constructor(readonly phase: string) {
-    super(`not implemented (${phase})`);
-    this.name = 'NotImplementedError';
-  }
-}

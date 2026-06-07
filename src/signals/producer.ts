@@ -3,8 +3,10 @@ import type { ObservabilitySink, SignalDispatcher } from '../domain/ports';
 import type { SignalJob } from './types';
 
 /**
- * DARK: delivery is cut here. With SIGNALS_ENABLED=false the producer records intent and
- * returns WITHOUT touching the dispatcher, so the queue stays provably unfed in production.
+ * DORMANT phase-2 producer. The `signalsEnabled` flag-gate is a PARAMETER for the day phase-2 wires
+ * this in; today `enqueueSignalJob` has NO runtime caller anywhere in src/, so the queue is
+ * structurally unfed in production regardless of the flag. Frozen and type-checked, not
+ * test-exercised — see src/signals/contract.ts.
  */
 export async function enqueueSignalJob(
   dispatcher: SignalDispatcher,

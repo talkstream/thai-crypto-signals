@@ -1,18 +1,19 @@
 import { env } from 'cloudflare:test';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { BitkubAdapter } from '../../src/adapters/bitkub/client';
 import { KvCacheWriter } from '../../src/adapters/storage/cache-writer';
 import { D1CollectStore } from '../../src/adapters/storage/collect-store';
 import { D1SymbolStore } from '../../src/adapters/storage/symbol-store';
 import { type CollectDeps, collect } from '../../src/collector/collect';
 import { bucketTsFor } from '../../src/config/cadence';
-import type { CollectStore } from '../../src/domain/ports';
+import type { CollectStore, Fetcher } from '../../src/domain/ports';
 import type { RunRecord } from '../../src/domain/types';
 import {
   FakeClock,
   FakeRng,
   InMemoryCacheWriter,
   InMemoryObservabilitySink,
+  recordingFetcher,
 } from '../helpers/fakes';
 import { resetDb } from '../helpers/migrate';
 
@@ -25,9 +26,6 @@ const PRIOR_BUCKET = BUCKET - 60_000 * CADENCE;
 beforeEach(async () => {
   await resetDb(db);
   await env.CACHE.delete('latest:v1');
-});
-afterEach(() => {
-  vi.restoreAllMocks();
 });
 
 function tickerEntry(over: Record<string, unknown> = {}): Record<string, unknown> {
@@ -65,9 +63,10 @@ interface Routes {
   ticker?: () => Response | Promise<Response>;
 }
 
-function routeFetch(routes: Routes) {
-  return vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
-    const url = String(input);
+// The network edge is INJECTED (contract replay), never patched: routeFetch sets the Fetcher that
+// the next makeDeps() wires into the adapter. No vi.spyOn, no global mutation.
+function handlerFor(routes: Routes): (url: string) => Response | Promise<Response> {
+  return (url: string) => {
     const pick = url.includes('/servertime')
       ? (routes.servertime ?? (() => Response.json(SERVER_MS)))
       : url.includes('/market/symbols')
@@ -76,8 +75,12 @@ function routeFetch(routes: Routes) {
           ? (routes.ticker ?? (() => Response.json([tickerEntry()])))
           : null;
     if (!pick) throw new Error(`unexpected url ${url}`);
-    return Promise.resolve(pick());
-  });
+    return pick();
+  };
+}
+let routedFetcher: Fetcher = recordingFetcher(handlerFor({})).fetcher;
+function routeFetch(routes: Routes): void {
+  routedFetcher = recordingFetcher(handlerFor(routes)).fetcher;
 }
 
 function makeDeps(over: Partial<CollectDeps> = {}): CollectDeps {
@@ -87,6 +90,7 @@ function makeDeps(over: Partial<CollectDeps> = {}): CollectDeps {
       timeoutMs: 8000,
       clock: new FakeClock(0),
       rng: new FakeRng(0.5),
+      fetcher: routedFetcher,
     }),
     symbols: new D1SymbolStore(db),
     store: new D1CollectStore(db),

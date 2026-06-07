@@ -16,7 +16,15 @@ export interface Rng {
   nextUnit(): number;
 }
 
-/** The ONE external HTTP boundary (Bitkub). Stubbed in tests via globalThis.fetch. */
+/**
+ * The network edge as a port: the exact slice of `fetch` the adapter needs. Production injects
+ * `globalThis.fetch`; tests inject a fetcher that replays recorded real Bitkub responses (contract
+ * replay). Making the network an injected port — not a patched global — is why the suite needs no
+ * `vi.mock`/`vi.spyOn` of its own code.
+ */
+export type Fetcher = typeof fetch;
+
+/** The ONE external HTTP boundary (Bitkub). Its network edge is the injected {@link Fetcher}. */
 export interface MarketDataSource {
   getServerTime(): Promise<number>;
   /** Envelope-validated as an array; entries stay raw for per-entry validation downstream. */

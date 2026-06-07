@@ -1,13 +1,21 @@
+// Test doubles — strictly at the system's EDGES, never of our own logic. There is no `vi.mock`/
+// `vi.spyOn` anywhere in the suite: our code always runs for real (against real local D1+KV via
+// Miniflare). What is injected here are ports for things a test cannot run authentically:
+//   - the network edge (recordingFetcher) — replays recorded real Bitkub responses (contract replay);
+//   - non-determinism (FakeClock/FakeRng) — fixed time/jitter (the CI-guarded no-wall-clock rule);
+//   - platform telemetry / cache (InMemoryObservabilitySink/InMemoryCacheWriter) — the Analytics
+//     Engine binding has no test-runtime API, and these can be told to throw to cover the
+//     best-effort swallow branches.
+
 import type {
   CacheWriter,
   Clock,
+  Fetcher,
   ObsBlobs,
   ObsDoubles,
   ObservabilitySink,
   Rng,
-  SignalDispatcher,
 } from '../../src/domain/ports';
-import type { SignalJob } from '../../src/signals/types';
 
 /** Deterministic injected clock; records sleeps instead of waiting. */
 export class FakeClock implements Clock {
@@ -57,10 +65,24 @@ export class InMemoryCacheWriter implements CacheWriter {
   }
 }
 
-/** In-memory queue producer (DARK). Records jobs; never delivers anywhere. */
-export class InMemorySignalDispatcher implements SignalDispatcher {
-  readonly jobs: SignalJob[] = [];
-  async enqueue(job: SignalJob): Promise<void> {
-    this.jobs.push(job);
-  }
+/**
+ * The network edge as an injected {@link Fetcher} — the seam that replaces `globalThis.fetch` with
+ * RECORDED real Bitkub responses (contract replay), so no test ever patches a global or mocks a
+ * module. `handler` maps a request URL/init to a Response; `.calls` counts invocations (for the
+ * retry/no-retry assertions the old `vi.spyOn(...).toHaveBeenCalledTimes` made).
+ */
+export function recordingFetcher(
+  handler: (url: string, init?: RequestInit) => Response | Promise<Response>,
+): { fetcher: Fetcher; readonly calls: number } {
+  let n = 0;
+  const fetcher: Fetcher = (input, init) => {
+    n += 1;
+    return Promise.resolve(handler(String(input), init as RequestInit | undefined));
+  };
+  return {
+    fetcher,
+    get calls() {
+      return n;
+    },
+  };
 }

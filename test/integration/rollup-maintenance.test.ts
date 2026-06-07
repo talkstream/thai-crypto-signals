@@ -1,10 +1,11 @@
 import { env } from 'cloudflare:test';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { BitkubAdapter } from '../../src/adapters/bitkub/client';
 import { D1SymbolStore } from '../../src/adapters/storage/symbol-store';
 import { maintenance } from '../../src/collector/maintenance';
 import { gmt7DayStart, hourStart, rollup } from '../../src/collector/rollup-job';
-import { FakeClock, FakeRng, InMemoryObservabilitySink } from '../helpers/fakes';
+import type { Fetcher } from '../../src/domain/ports';
+import { FakeClock, FakeRng, InMemoryObservabilitySink, recordingFetcher } from '../helpers/fakes';
 import { resetDb } from '../helpers/migrate';
 
 const db = env.DB;
@@ -14,9 +15,6 @@ const T = 1_700_000_000_000;
 
 beforeEach(async () => {
   await resetDb(db);
-});
-afterEach(() => {
-  vi.restoreAllMocks();
 });
 
 async function seedBtc(): Promise<number> {
@@ -149,12 +147,13 @@ describe('rollup', () => {
 });
 
 describe('maintenance', () => {
-  function adapter(): BitkubAdapter {
+  function adapter(fetcher: Fetcher): BitkubAdapter {
     return new BitkubAdapter({
       baseUrl: 'https://api.bitkub.com',
       timeoutMs: 8000,
       clock: new FakeClock(0),
       rng: new FakeRng(0.5),
+      fetcher,
     });
   }
 
@@ -172,30 +171,28 @@ describe('maintenance', () => {
       .bind(T - 40 * DAY, T - 40 * DAY, T - 40 * DAY)
       .run();
 
-    vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
-      Promise.resolve(
-        Response.json({
-          error: 0,
-          result: [
-            {
-              symbol: 'ETH_THB',
-              base_asset: 'ETH',
-              quote_asset: 'THB',
-              base_asset_scale: 8,
-              price_scale: 2,
-              quote_asset_scale: 2,
-              market_segment: 'SPOT',
-              status: 'active',
-            },
-          ],
-        }),
-      ),
+    const f = recordingFetcher(() =>
+      Response.json({
+        error: 0,
+        result: [
+          {
+            symbol: 'ETH_THB',
+            base_asset: 'ETH',
+            quote_asset: 'THB',
+            base_asset_scale: 8,
+            price_scale: 2,
+            quote_asset_scale: 2,
+            market_segment: 'SPOT',
+            status: 'active',
+          },
+        ],
+      }),
     );
 
     const store = new D1SymbolStore(db);
     await maintenance({
       db,
-      marketData: adapter(),
+      marketData: adapter(f.fetcher),
       symbols: store,
       obs: new InMemoryObservabilitySink(),
       clock: new FakeClock(T),
@@ -221,12 +218,10 @@ describe('maintenance', () => {
 
   it('records a failed catalog refresh but still prunes', async () => {
     await seedBtc();
-    vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
-      Promise.resolve(new Response('boom', { status: 500 })),
-    );
+    const f = recordingFetcher(() => new Response('boom', { status: 500 }));
     await maintenance({
       db,
-      marketData: adapter(),
+      marketData: adapter(f.fetcher),
       symbols: new D1SymbolStore(db),
       obs: new InMemoryObservabilitySink(),
       clock: new FakeClock(T),
@@ -257,12 +252,10 @@ describe('maintenance', () => {
       .prepare(ins)
       .bind(btc, T - HOUR)
       .run(); // recent
-    vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
-      Promise.resolve(Response.json({ error: 0, result: [] })),
-    );
+    const f = recordingFetcher(() => Response.json({ error: 0, result: [] }));
     await maintenance({
       db,
-      marketData: adapter(),
+      marketData: adapter(f.fetcher),
       symbols: new D1SymbolStore(db),
       obs: new InMemoryObservabilitySink(),
       clock: new FakeClock(T),

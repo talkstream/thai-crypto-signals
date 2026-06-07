@@ -5,7 +5,7 @@ import {
   BitkubTimeoutError,
   BitkubUnreachableError,
 } from '../../domain/errors';
-import type { Clock, MarketDataSource, Rng } from '../../domain/ports';
+import type { Clock, Fetcher, MarketDataSource, Rng } from '../../domain/ports';
 import type { CatalogEntry } from '../../domain/types';
 import { parseServerTime, parseSymbols, parseTickerEnvelope } from './schemas';
 
@@ -18,12 +18,15 @@ export interface BitkubAdapterOptions {
   timeoutMs: number;
   clock: Clock;
   rng: Rng;
+  /** Network edge (a port). Prod passes globalThis.fetch; tests pass a recorded-response fetcher. */
+  fetcher: Fetcher;
 }
 
 /**
  * The ONE external HTTP boundary. Polite User-Agent, injectable timeout, one retry on
  * 5xx/network errors (with jittered backoff), no retry on 429 (rate limited) or timeout.
- * In tests, globalThis.fetch is stubbed with recorded cassettes.
+ * The network call goes through the injected {@link Fetcher} — production wires globalThis.fetch,
+ * tests wire a fetcher that replays recorded real responses (contract replay; no global patching).
  */
 export class BitkubAdapter implements MarketDataSource {
   constructor(private readonly opts: BitkubAdapterOptions) {}
@@ -37,7 +40,7 @@ export class BitkubAdapter implements MarketDataSource {
     let attempt = 0;
     for (;;) {
       try {
-        const res = await fetch(url, {
+        const res = await this.opts.fetcher(url, {
           headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
           signal: AbortSignal.timeout(this.opts.timeoutMs),
         });
