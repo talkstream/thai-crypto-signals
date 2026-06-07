@@ -31,7 +31,7 @@ describe('TelegramNotifier', () => {
     expect(new Headers(seen?.init?.headers).get('content-type')).toBe('application/json');
     const body = JSON.parse(String(seen?.init?.body)) as Record<string, unknown>;
     expect(body.chat_id).toBe('775707');
-    expect(body.text).toBe('TCS collect 2023-11-15 05:14 ICT — 2 symbols');
+    expect(body.text).toBe('TCS signal 2023-11-15 05:14 ICT — 2 symbols moved: BTC_THB, ETH_THB');
     expect('parse_mode' in body).toBe(false); // literal text, injection-safe
   });
 

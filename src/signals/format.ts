@@ -13,17 +13,22 @@ const ICT = new Intl.DateTimeFormat('en-CA', {
   hourCycle: 'h23',
 });
 
+/** Cap the listed movers so a broad-move tick can't blow past the 4096/5000-char channel limits. */
+const MAX_LISTED = 12;
+
 /**
- * The per-tick delivery body: a concise, plain-text heartbeat. Deliberately NOT the full symbol list
- * (440+ symbols would blow past the 4096/5000-char channel caps and carry no signal). No markup —
- * sent without a Telegram `parse_mode`, so the literal text is injection-safe (a date's `-`/`.`/`=`
- * would otherwise need MarkdownV2 escaping). The only dynamic fields are a controlled count + time.
+ * The signal delivery body: a concise, plain-text line naming the symbols that fired the rule this
+ * bucket (the movers), capped with a "+N more" tail. No markup — sent without a Telegram `parse_mode`,
+ * so the literal text is injection-safe (symbol names are exchange-controlled but ASCII tickers, and a
+ * date's `-`/`.`/`=` would otherwise need MarkdownV2 escaping).
  */
 export function formatSignalMessage(job: SignalJob): string {
   const p = Object.fromEntries(ICT.formatToParts(job.bucketTs).map((x) => [x.type, x.value]));
   const ts = `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
   const n = job.symbols.length;
-  return `TCS collect ${ts} ICT — ${n} symbol${n === 1 ? '' : 's'}`;
+  const head = job.symbols.slice(0, MAX_LISTED).join(', ');
+  const tail = n > MAX_LISTED ? `, +${n - MAX_LISTED} more` : '';
+  return `TCS signal ${ts} ICT — ${n} symbol${n === 1 ? '' : 's'} moved: ${head}${tail}`;
 }
 
 /**

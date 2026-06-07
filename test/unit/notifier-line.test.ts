@@ -39,7 +39,7 @@ describe('LineNotifier', () => {
     };
     expect(body.to).toBe('Udeadbeef');
     expect(body.messages).toEqual([
-      { type: 'text', text: 'TCS collect 2023-11-15 05:14 ICT — 1 symbol' },
+      { type: 'text', text: 'TCS signal 2023-11-15 05:14 ICT — 1 symbol moved: BTC_THB' },
     ]);
   });
 

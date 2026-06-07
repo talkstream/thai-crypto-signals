@@ -18,7 +18,10 @@
     "TICKER_TIMEOUT_MS": "8000",
     "SYMBOL_MAP_TTL_MS": "600000",
     "ROLLUP_MAX_WINDOWS": "48",
-    "SIGNALS_ENABLED": "false"
+    "SIGNALS_ENABLED": "false",
+    // Signal rule: a symbol moving >= this many basis points (300 = 3%) vs the prior bucket is a
+    // "mover". A tick with no movers emits no signal. Lower = more signals (noisier).
+    "SIGNAL_PCT_THRESHOLD_BP": "300"
   },
 
   "d1_databases": [

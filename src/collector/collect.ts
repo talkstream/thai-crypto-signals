@@ -21,6 +21,7 @@ import type {
 } from '../domain/ports';
 import { parseDecimalToMinor, pctToBasisPoints, rescaleMinor } from '../domain/price';
 import type { MarketSymbol, RunRecord, TickerSnapshot } from '../domain/types';
+import { pctChangeFires } from '../signals/indicators';
 import { enqueueSignalJob } from '../signals/producer';
 
 const LATEST_KEY = 'latest:v1';
@@ -37,6 +38,8 @@ export interface CollectDeps {
   dispatcher: SignalDispatcher;
   /** Flag-gate; the producer emits intent only (no enqueue) when false. */
   signalsEnabled: boolean;
+  /** Signal rule threshold in basis points: a symbol moving >= this vs the prior bucket is a mover. */
+  signalThresholdBp: number;
 }
 
 function fetchErrorStatus(e: unknown): string {
@@ -153,8 +156,17 @@ export async function collect(deps: CollectDeps): Promise<void> {
     cadenceMinutes,
     dispatcher,
     signalsEnabled,
+    signalThresholdBp,
   } = deps;
   const startedMs = clock.now();
+
+  // A non-positive (or NaN, from a missing/garbage var) threshold disables signals SAFELY — no symbol
+  // can ever be a mover (`>` is false). Surface it when signals are meant to be on, so the misconfig
+  // is observable rather than silently dark.
+  const thresholdValid = signalThresholdBp > 0;
+  if (signalsEnabled && !thresholdValid) {
+    safeEvent(obs, 'signal_config_invalid', { key: 'SIGNAL_PCT_THRESHOLD_BP' }, { count: 1 });
+  }
 
   // 1. Symbol catalog (bootstrap on an empty DB).
   let map = await symbols.loadMap();
@@ -204,6 +216,7 @@ export async function collect(deps: CollectDeps): Promise<void> {
   // 5. Per-entry mapping (one bad entry never discards the tick).
   const snapshots: TickerSnapshot[] = [];
   const latest: LatestEntryDto[] = [];
+  const movers: string[] = []; // symbols that fired the pct-change rule this bucket (the signal)
   let driftCount = 0;
   let scaleOverflowCount = 0;
   const seen = new Set<number>();
@@ -237,13 +250,19 @@ export async function collect(deps: CollectDeps): Promise<void> {
     if (priorEntry !== undefined) {
       // Normalize the prior price to the current scale so a scale change is not a phantom jump.
       const priorNorm = rescaleMinor(priorEntry.last, priorEntry.scale, sym.priceScale);
-      if (priorNorm > 0n && isSanityJump(snapshot.lastMinor, priorNorm)) {
-        safeEvent(
-          obs,
-          'sanity_jump',
-          { symbol: entry.symbol },
-          { last: Number(snapshot.lastMinor), prior: Number(priorNorm) },
-        );
+      if (priorNorm > 0n) {
+        if (isSanityJump(snapshot.lastMinor, priorNorm)) {
+          safeEvent(
+            obs,
+            'sanity_jump',
+            { symbol: entry.symbol },
+            { last: Number(snapshot.lastMinor), prior: Number(priorNorm) },
+          );
+        }
+        // Signal rule: a symbol that moved >= the threshold vs the prior bucket is a mover.
+        if (thresholdValid && pctChangeFires(snapshot.lastMinor, priorNorm, signalThresholdBp)) {
+          movers.push(entry.symbol);
+        }
       }
     }
     snapshots.push(snapshot);
@@ -295,20 +314,16 @@ export async function collect(deps: CollectDeps): Promise<void> {
       // hot cache is non-authoritative; never fail the tick on a KV write
     }
 
-    // 7b. Phase-2 signals: one batched job per successful non-overlap tick (all symbols in one
-    //     SignalJob — keeps queue ops tiny). DARK until SIGNALS_ENABLED; the flag-gate lives in the
-    //     producer. Enqueue is best-effort — a queue-send failure must never fail the committed tick.
-    if (latest.length > 0) {
+    // 7b. Phase-2 signals: enqueue ONE batched job of the movers (symbols that fired the pct-change
+    //     rule) on a successful non-overlap tick — a tick with no movers produces no signal. DARK
+    //     until SIGNALS_ENABLED; the flag-gate lives in the producer. Enqueue is best-effort — a
+    //     queue-send failure must never fail the already-committed tick.
+    if (movers.length > 0) {
       try {
         await enqueueSignalJob(
           dispatcher,
           signalsEnabled,
-          {
-            bucketTs,
-            symbols: latest.map((e) => e.symbol),
-            producedAt: finishedMs,
-            schemaVersion: 1,
-          },
+          { bucketTs, symbols: movers, producedAt: finishedMs, schemaVersion: 1 },
           obs,
         );
       } catch (e) {

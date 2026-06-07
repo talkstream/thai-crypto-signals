@@ -1,28 +1,26 @@
-// DARK SEAM — phase-2 indicator signatures over bigint minor-unit series. The exact contract is
-// frozen now; the implementations are deliberately unimplemented in v1. DORMANT: carved out of
-// coverage, type-checked only (see src/signals/contract.ts).
+// Signal rule evaluation over bigint minor-unit prices. Live as of the indicators sub-phase: the
+// pct-change rule gates signal emission in the collect path (see src/collector/collect.ts).
 
-/** Phase-2-only sentinel. Lives with the dormant scaffold, not in the live domain errors. */
-class NotImplementedError extends Error {
-  readonly tag = 'NotImplemented' as const;
-  constructor(readonly phase: string) {
-    super(`not implemented (${phase})`);
-    this.name = 'NotImplementedError';
-  }
+/**
+ * Per-bucket price move in integer basis points (percent × 100), computed entirely on bigint minor
+ * units and truncated toward zero — matching the codebase's basis-points convention (see
+ * `pctToBasisPoints`). Returns 0 when there is no positive baseline (defensive for direct callers;
+ * the collect path already guards `priorNorm > 0n` upstream).
+ */
+export function percentChangeBp(currentMinor: bigint, previousMinor: bigint): number {
+  if (previousMinor <= 0n) return 0;
+  return Number(((currentMinor - previousMinor) * 10000n) / previousMinor);
 }
 
-export function percentChange(_series: bigint[]): number {
-  throw new NotImplementedError('phase2');
-}
-
-export function thresholdCross(_series: bigint[], _threshold: bigint): boolean {
-  throw new NotImplementedError('phase2');
-}
-
-export function smaCross(_series: bigint[], _period: number): boolean {
-  throw new NotImplementedError('phase2');
-}
-
-export function nPeriodHighLow(_series: bigint[], _period: number): { high: bigint; low: bigint } {
-  throw new NotImplementedError('phase2');
+/**
+ * The pct-change signal rule: did this symbol move at least `thresholdBp` basis points (in either
+ * direction) versus the immediately-preceding bucket? This is what turns a per-tick collection
+ * heartbeat into an actual price-move signal.
+ */
+export function pctChangeFires(
+  currentMinor: bigint,
+  previousMinor: bigint,
+  thresholdBp: number,
+): boolean {
+  return Math.abs(percentChangeBp(currentMinor, previousMinor)) >= thresholdBp;
 }

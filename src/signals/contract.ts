@@ -1,11 +1,9 @@
 /**
  * Compile-time contract for the signals wire shape and dispatcher port.
  *
- * Phase 2 wired the producer side live: the producer (enqueueSignalJob) is called from the collect
- * path and QueueDispatcher is instantiated in src/index.ts — both are now IN coverage and tested.
- * The only still-dormant piece is the rule-eval scaffold (src/signals/indicators.ts), a later
- * sub-phase carved out of COVERAGE but still fully TYPE-CHECKED by `tsgo --noEmit` (the typecheck
- * excludes nothing).
+ * The entire signals pipeline is live and 100% covered: the producer (enqueueSignalJob) is called
+ * from the collect path, QueueDispatcher is instantiated in src/index.ts, and the rule-eval
+ * (src/signals/indicators.ts) now gates emission. Nothing under src/signals is coverage-excluded.
  *
  * This file freezes the contract regardless of coverage: static assertions that the wire shape
  * (SignalJob) and the dispatcher port have not drifted, so the compiler (and CI) fail the moment

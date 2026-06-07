@@ -11,15 +11,25 @@ const job = (over: Partial<SignalJob> = {}): SignalJob => ({
 });
 
 describe('formatSignalMessage', () => {
-  it('renders a plain-text heartbeat with the bucket time in ICT and the symbol count', () => {
+  it('names the movers with the bucket time in ICT', () => {
     // ICT (Asia/Bangkok, no DST) of 1_700_000_040_000 == 2023-11-15 05:14, independently computed.
-    expect(formatSignalMessage(job())).toBe('TCS collect 2023-11-15 05:14 ICT — 2 symbols');
+    expect(formatSignalMessage(job())).toBe(
+      'TCS signal 2023-11-15 05:14 ICT — 2 symbols moved: BTC_THB, ETH_THB',
+    );
   });
 
-  it('reflects the symbol count and singularises "symbol" for exactly one', () => {
+  it('singularises "symbol" for exactly one mover', () => {
     expect(formatSignalMessage(job({ symbols: ['BTC_THB'] }))).toBe(
-      'TCS collect 2023-11-15 05:14 ICT — 1 symbol',
+      'TCS signal 2023-11-15 05:14 ICT — 1 symbol moved: BTC_THB',
     );
+  });
+
+  it('caps the listed movers with a "+N more" tail', () => {
+    const symbols = Array.from({ length: 14 }, (_, i) => `S${i + 1}_THB`);
+    const msg = formatSignalMessage(job({ symbols }));
+    expect(msg).toContain('— 14 symbols moved: S1_THB, S2_THB,');
+    expect(msg).toContain('S12_THB, +2 more');
+    expect(msg).not.toContain('S13_THB'); // beyond the cap, only counted
   });
 });
 

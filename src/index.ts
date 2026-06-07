@@ -76,6 +76,7 @@ export function makeWorker(wiring: WorkerWiring) {
           cadenceMinutes: cadence,
           dispatcher: new QueueDispatcher(env.SIGNALS_QUEUE),
           signalsEnabled: String(env.SIGNALS_ENABLED) === 'true',
+          signalThresholdBp: Number(env.SIGNAL_PCT_THRESHOLD_BP),
         });
       }
     },

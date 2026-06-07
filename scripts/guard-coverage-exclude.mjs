@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Guard: the coverage exclude list must stay EXACTLY these entries, so coverage can never be
-// silently widened to hide untested code. The signals entries carve out only the genuinely DEAD
-// producer-side scaffold (zero runtime callers, frozen phase-2, type-checked via
-// src/signals/contract.ts). The LIVE consumer (src/signals/consumer.ts) is intentionally NOT here —
-// it is covered by a real test. Changing this list requires editing this guard too: no silent widening.
+// silently widened to hide untested code. The entire signals pipeline is now live and 100% covered —
+// nothing under src/signals is excluded; only non-product files remain (recorded cassettes, the spike
+// dir, the generated worker-configuration.d.ts, and the tests). Changing this list requires editing
+// this guard too: no silent widening.
 
 import { readFileSync } from 'node:fs';
 
@@ -12,7 +12,6 @@ const EXPECTED = [
   'src/spike/**',
   'worker-configuration.d.ts',
   'test/**',
-  'src/signals/indicators.ts',
 ];
 
 const config = readFileSync('vitest.config.ts', 'utf8');

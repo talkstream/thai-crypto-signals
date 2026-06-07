@@ -101,8 +101,24 @@ function makeDeps(over: Partial<CollectDeps> = {}): CollectDeps {
     cadenceMinutes: CADENCE,
     dispatcher: new InMemorySignalDispatcher(),
     signalsEnabled: false,
+    signalThresholdBp: 300, // 3% — a symbol moving >= this vs the prior bucket is a mover
     ...over,
   };
+}
+
+// Seed a prior-bucket snapshot so the current tick can be measured against it (for the mover rule).
+async function seedPriorSnapshot(symbol: string, lastMinor: number, scale = 2): Promise<void> {
+  const id = (await new D1SymbolStore(db).loadMap()).get(symbol)?.id;
+  if (!id) throw new Error(`seed prior: ${symbol} not in catalog`);
+  await db
+    .prepare(
+      `INSERT INTO ticker_snapshots
+         (symbol_id, bucket_ts, observed_ms, last_minor, high_minor, low_minor, price_scale_used,
+          base_volume, quote_volume, pct_change_bp, ingested_ms)
+       VALUES (?, ?, ?, ?, ?, ?, ?, '1', '1', 0, ?)`,
+    )
+    .bind(id, PRIOR_BUCKET, PRIOR_BUCKET, lastMinor, lastMinor, lastMinor, scale, PRIOR_BUCKET)
+    .run();
 }
 
 async function seedSymbols(entries: Record<string, unknown>[] = [symbolEntry()]): Promise<void> {
@@ -474,9 +490,11 @@ describe('collect — best-effort sinks never fail the tick', () => {
   });
 });
 
-describe('collect — signals producer wiring (DARK by default)', () => {
-  it('enqueues exactly one SignalJob on a successful non-overlap tick when enabled', async () => {
+describe('collect — signals producer wiring (movers only, DARK by default)', () => {
+  it('enqueues a job of ONLY the movers on a successful non-overlap tick when enabled', async () => {
     await seedSymbols([symbolEntry(), symbolEntry({ symbol: 'ETH_THB', base_asset: 'ETH' })]);
+    await seedPriorSnapshot('BTC_THB', 100_000_000); // prior 1,000,000.00 vs current 2,017,050.88 -> mover
+    await seedPriorSnapshot('ETH_THB', 7_000_000); // prior 70,000.00 vs current 70,000.00 -> flat, NOT a mover
     routeFetch({
       ticker: () =>
         Response.json([tickerEntry(), tickerEntry({ symbol: 'ETH_THB', last: '70000' })]),
@@ -489,11 +507,23 @@ describe('collect — signals producer wiring (DARK by default)', () => {
     expect(job?.bucketTs).toBe(BUCKET);
     expect(job?.schemaVersion).toBe(1);
     expect(job?.producedAt).toBe(SERVER_MS); // finishedMs from the FakeClock(SERVER_MS)
-    expect([...(job?.symbols ?? [])].sort()).toEqual(['BTC_THB', 'ETH_THB']);
+    expect(job?.symbols).toEqual(['BTC_THB']); // only the mover, ETH (flat) excluded
+  });
+
+  it('does NOT enqueue when no symbol moved enough', async () => {
+    await seedSymbols();
+    await seedPriorSnapshot('BTC_THB', 201_705_088); // prior == current -> 0% move, not a mover
+    routeFetch({ ticker: () => Response.json([tickerEntry()]) });
+    const dispatcher = new InMemorySignalDispatcher();
+    await collect(makeDeps({ dispatcher, signalsEnabled: true }));
+
+    expect(await snapshotCount()).toBe(1); // tick still collected
+    expect(dispatcher.jobs.length).toBe(0); // ...but produced no signal
   });
 
   it('does NOT enqueue when signals are disabled (intent only)', async () => {
     await seedSymbols();
+    await seedPriorSnapshot('BTC_THB', 100_000_000); // BTC is a mover
     routeFetch({ ticker: () => Response.json([tickerEntry()]) });
     const dispatcher = new InMemorySignalDispatcher();
     const obs = new InMemoryObservabilitySink();
@@ -505,13 +535,38 @@ describe('collect — signals producer wiring (DARK by default)', () => {
 
   it('does NOT enqueue on an overlap (duplicate-fire) tick', async () => {
     await seedSymbols();
+    await seedPriorSnapshot('BTC_THB', 100_000_000); // BTC is a mover on both fires
     routeFetch({ ticker: () => Response.json([tickerEntry()]) });
     await collect(makeDeps({ signalsEnabled: true })); // first writer
-    routeFetch({ ticker: () => Response.json([tickerEntry({ last: '9999999.99' })]) });
     const dispatcher = new InMemorySignalDispatcher();
     await collect(makeDeps({ dispatcher, signalsEnabled: true })); // duplicate fire -> overlap
 
     expect(dispatcher.jobs.length).toBe(0);
+  });
+
+  it('surfaces an invalid threshold and stays dark (no signal)', async () => {
+    await seedSymbols();
+    await seedPriorSnapshot('BTC_THB', 100_000_000); // BTC would move +101% under a valid threshold
+    routeFetch({ ticker: () => Response.json([tickerEntry()]) });
+    const dispatcher = new InMemorySignalDispatcher();
+    const obs = new InMemoryObservabilitySink();
+    await collect(
+      makeDeps({ dispatcher, obs, signalsEnabled: true, signalThresholdBp: Number.NaN }),
+    );
+
+    expect(obs.events.some((e) => e.kind === 'signal_config_invalid')).toBe(true);
+    expect(dispatcher.jobs.length).toBe(0); // an invalid threshold makes no symbol a mover
+  });
+
+  it('treats a non-positive prior as no baseline (no mover)', async () => {
+    await seedSymbols();
+    await seedPriorSnapshot('BTC_THB', 0); // degenerate zero prior -> priorNorm <= 0 -> guard skips it
+    routeFetch({ ticker: () => Response.json([tickerEntry()]) });
+    const dispatcher = new InMemorySignalDispatcher();
+    await collect(makeDeps({ dispatcher, signalsEnabled: true }));
+
+    expect(await snapshotCount()).toBe(1); // still collected
+    expect(dispatcher.jobs.length).toBe(0); // no positive baseline -> not a mover -> no signal
   });
 
   it('does NOT enqueue when zero symbols were collected (all drift)', async () => {
@@ -526,6 +581,7 @@ describe('collect — signals producer wiring (DARK by default)', () => {
 
   it('swallows an enqueue failure (best-effort): the tick still commits', async () => {
     await seedSymbols();
+    await seedPriorSnapshot('BTC_THB', 100_000_000); // BTC is a mover -> the producer is called
     routeFetch({ ticker: () => Response.json([tickerEntry()]) });
     const dispatcher = new InMemorySignalDispatcher();
     dispatcher.throwOnEnqueue = true;
