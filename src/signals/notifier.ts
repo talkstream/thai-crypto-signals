@@ -2,10 +2,11 @@ import type { SignalJob } from './types';
 
 /**
  * Outcome of delivering one job. Per-channel notifiers return single-unit counts; the FanOut sums
- * them. The consumer retries ONLY when `delivered === 0 && transientFailures > 0 && ambiguousFailures
- * === 0` — so a whole-job redelivery never re-sends a channel that already delivered (none did) and
- * never re-sends a non-idempotent channel whose request may have taken effect. `retryAfterSec` is an
- * optional delay hint (max across transient channels) fed to the queue's retry backoff.
+ * them. The consumer retries ONLY when `transientFailures > 0 && ambiguousFailures === 0 &&
+ * nonIdempotentDelivered === 0` — so a whole-job redelivery re-sends only idempotent channels (LINE
+ * retry-key / webhook receiver-dedup absorb the replay) and re-attempts the not-yet-delivered ones,
+ * recovering a transiently-failed channel without duplicating a non-idempotent (Telegram) delivery.
+ * `retryAfterSec` is an optional delay hint (max across transient channels) fed to the retry backoff.
  */
 export interface DeliveryResult {
   /** 2xx (or an idempotent replay, e.g. LINE 409). */
