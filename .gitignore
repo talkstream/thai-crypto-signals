@@ -9,3 +9,7 @@ dist/
 worker-configuration.d.ts
 .DS_Store
 *.log
+
+# Internal deliverables (case studies, client docs) are kept locally / synced to Notion,
+# not published in this educational repo.
+deliverables/
