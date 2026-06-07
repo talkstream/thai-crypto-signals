@@ -9,7 +9,8 @@ const MIN_RETRY_S = 5; // floor a transient retry so a flapping endpoint isn't h
 const MAX_RETRY_S = 86_400; // the queue's delaySeconds ceiling (24h)
 /** JS Date range ceiling (ms); beyond this, Intl date formatting throws RangeError. */
 const MAX_EPOCH_MS = 8_640_000_000_000_000;
-/** Cap the price decimal scale: `Number.toFixed(scale)` throws RangeError above 100; real scales are ≤10. */
+/** Cap the price decimal scale: `Number.toFixed(scale)` throws RangeError for scale > 100; 20 stays
+ *  well within that limit (real Bitkub price scales are ≤ 2). */
 const MAX_PRICE_SCALE = 20;
 
 const MoverSchema = z.object({

@@ -532,6 +532,18 @@ describe('collect — signals producer wiring (movers only, DARK by default)', (
     expect(dispatcher.jobs[0]?.movers.map((m) => m.symbol)).toEqual(['ETH_THB']);
   });
 
+  it('a watchlisted symbol that does NOT move enough still produces no signal', async () => {
+    await seedSymbols();
+    await seedPriorSnapshot('BTC_THB', 201_705_088); // prior == current -> 0% move, below threshold
+    routeFetch({ ticker: () => Response.json([tickerEntry()]) });
+    const dispatcher = new InMemorySignalDispatcher();
+    await collect(
+      makeDeps({ dispatcher, signalsEnabled: true, signalWatchlist: new Set(['BTC_THB']) }),
+    );
+
+    expect(dispatcher.jobs.length).toBe(0); // in the watchlist, but the threshold still gates it
+  });
+
   it('does NOT enqueue when no symbol moved enough', async () => {
     await seedSymbols();
     await seedPriorSnapshot('BTC_THB', 201_705_088); // prior == current -> 0% move, not a mover
