@@ -16,9 +16,9 @@ describe('formatSignalMessage', () => {
     expect(formatSignalMessage(job())).toBe('TCS collect 2023-11-15 05:14 ICT — 2 symbols');
   });
 
-  it('reflects the symbol count', () => {
+  it('reflects the symbol count and singularises "symbol" for exactly one', () => {
     expect(formatSignalMessage(job({ symbols: ['BTC_THB'] }))).toBe(
-      'TCS collect 2023-11-15 05:14 ICT — 1 symbols',
+      'TCS collect 2023-11-15 05:14 ICT — 1 symbol',
     );
   });
 });

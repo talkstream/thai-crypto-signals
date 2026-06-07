@@ -22,7 +22,8 @@ const ICT = new Intl.DateTimeFormat('en-CA', {
 export function formatSignalMessage(job: SignalJob): string {
   const p = Object.fromEntries(ICT.formatToParts(job.bucketTs).map((x) => [x.type, x.value]));
   const ts = `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
-  return `TCS collect ${ts} ICT — ${job.symbols.length} symbols`;
+  const n = job.symbols.length;
+  return `TCS collect ${ts} ICT — ${n} symbol${n === 1 ? '' : 's'}`;
 }
 
 /**
