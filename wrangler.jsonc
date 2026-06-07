@@ -34,9 +34,10 @@
 
   "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "tcs_metrics" }],
 
-  // DARK signals scaffold: producer + consumer + DLQ are wired so phase 2 grafts
-  // without rework. Delivery is cut at the flag-gated producer (SIGNALS_ENABLED=false),
-  // so .send is never called and the queue stays provably unfed in production.
+  // DORMANT phase-2 signals scaffold: the producer/consumer/DLQ bindings exist so phase 2 grafts
+  // without rework. The producer (enqueueSignalJob) has NO runtime caller and QueueDispatcher is
+  // never instantiated, so .send is never called and the queue is structurally unfed in production
+  // — a wiring fact, not a runtime SIGNALS_ENABLED check. See src/signals (frozen, type-checked).
   "queues": {
     "producers": [{ "binding": "SIGNALS_QUEUE", "queue": "tcs-signals" }],
     "consumers": [

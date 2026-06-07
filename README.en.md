@@ -146,9 +146,11 @@ pnpm exec wrangler d1 migrations apply thai-crypto-signals --local   # create lo
 pnpm test:coverage                                                   # run the test suite
 ```
 
-The test suite spins up a **real local D1 database and KV** — the storage is not faked. The only
-stubbed boundary is the outbound call to Bitkub (recorded responses); the queue producer uses a
-fake, since the local test runtime has no producer-side queue API. That is what "testing
+The test suite spins up a **real local D1 database and KV** (Miniflare) and runs our own code for
+real — no module is mocked (zero `vi.mock`/`vi.spyOn` in the whole suite). The one external
+boundary, the exchange, is **injected as a `fetcher` that replays recorded real responses** —
+contract replay, not invented behaviour. (The dormant phase-2 signals scaffold is not exercised at
+all; it is frozen and type-checked instead — see `src/signals/contract.ts`.) That is what "testing
 against real infrastructure" means, and why the suite catches real bugs.
 
 Now start the Worker locally and trigger one collect tick by hand:
@@ -208,9 +210,13 @@ the local checkpoint. Give the `*/2` cron one tick (≈2 minutes) to populate da
 usually means migrations were not applied with `--remote`, or a binding id in `wrangler.jsonc` is
 still the original rather than yours.
 
-**Cost.** This whole project fits Cloudflare's **free** tier: cron triggers, D1, KV, and — since
-February 2026 — Queues (10,000 operations/day) are all included. No paid plan is needed for this
-workload.
+**Cost.** The request side is generous — Workers requests, cron triggers, KV, and (since February
+2026) Queues at 10,000 operations/day all fit Cloudflare's **free** tier. The real limit is **D1
+writes**: at the default cadence (every 2 minutes × ~440 markets) the collector writes ~316,000 rows
+per day, far above the D1 free plan's **100,000 rows-written/day** (and more once the two snapshot
+indexes are counted). **So, as configured, this project needs the Workers Paid plan** for D1. To run
+it on the free tier, cut the write volume below 100,000/day — raise the cadence to a larger
+60-divisor (≈20 minutes) and/or collect fewer markets (e.g. THB pairs only).
 
 **Cleanup (so you do not leave resources running)**
 
@@ -245,8 +251,8 @@ Make the ideas your own. Each lists a difficulty and a hint.
 2. **(Medium)** Add a 15-minute rollup interval alongside 1h/1d. *Hint:* the rollup is set-based SQL
    in `src/collector/rollup-job.ts`; remember the 60-divisor rule when you pick the window.
 3. **(Medium)** Add a test for a new failure mode — say, the ticker returns HTTP 500. *Hint:* the
-   only stubbed boundary is `globalThis.fetch`; see `test/integration/collect.test.ts` for the
-   pattern.
+   only substituted boundary is the injected `fetcher` (a recorded-response `Fetcher` passed to
+   `BitkubAdapter`); see `test/integration/collect.test.ts` for the pattern.
 4. **(Advanced)** Light up the disabled **signals** scaffold and send one Telegram message when a
    price moves more than X%. *Hint:* `src/signals/` exists but is not yet wired into the collect
    path, and nothing reads `SIGNALS_ENABLED` yet — wiring the producer in (and gating it on that

@@ -13,8 +13,10 @@ read API, hourly/daily OHLC rollups, daily retention, and a **dark (zero-deliver
 phase-2 signals/notifications. Live: `https://thai-crypto-signals.mommyslittlehelper.workers.dev`.
 
 - TypeScript 7 (`tsgo`) typecheck · Biome v2 · Vitest (Workers pool) · D1 / KV / Queues / Analytics Engine.
-- **100% test coverage** (statements/branches/functions/lines) with **no mocks** beyond the single
-  recorded Bitkub HTTP boundary; storage exercised against the real Miniflare runtime.
+- **100% coverage of the live production code** (statements/branches/functions/lines) with **no
+  module mocks** (zero `vi.mock`/`vi.spyOn`): storage runs on the real Miniflare runtime and the
+  exchange is injected as a recorded-response `fetcher` (contract replay). The dormant phase-2
+  signals scaffold is type-checked, not coverage-exercised.
 
 ## How it was built — two agent panels
 
@@ -38,7 +40,8 @@ Reproducer-first discipline turned up things no amount of memory would have:
   and optional `*_self` fields — not the `{error,result}` envelope the docs implied.
 - **`@cloudflare/vitest-pool-workers` v0.16 dropped the `/config` subpath** (vitest 4): config is
   now the `cloudflareTest` plugin. And `undici MockAgent`/`fetchMock` isn't available in the pool
-  → the HTTP boundary is stubbed via `vi.spyOn(globalThis.fetch)` with recorded cassettes.
+  → the HTTP boundary is injected as a `fetcher` that replays recorded cassettes (contract replay;
+  no `vi.spyOn`).
 - **SQLite needs an explicit `WHERE true`** before `ON CONFLICT` in `INSERT…SELECT` upserts.
 - **Cron cadence must be a 60-divisor**, or `*/N` firing and the continuous-epoch bucket collide
   at the hour boundary (verified with Node).
