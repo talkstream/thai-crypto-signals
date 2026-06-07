@@ -88,3 +88,63 @@ describe('worker fetch', () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe('worker queue (signals delivery)', () => {
+  const JOB = { bucketTs: 1, symbols: ['BTC_THB'], producedAt: 2, schemaVersion: 1 };
+
+  function oneMessageBatch(body: unknown) {
+    const calls = { acked: 0, retried: 0 };
+    const messages = [
+      {
+        body,
+        attempts: 1,
+        ack: () => {
+          calls.acked += 1;
+        },
+        retry: () => {
+          calls.retried += 1;
+        },
+      },
+    ];
+    return { batch: { messages } as unknown as MessageBatch<unknown>, calls };
+  }
+
+  // queue() reads only METRICS + the channel secrets + SIGNALS_ENABLED; a partial Env is enough.
+  const envWith = (over: Record<string, string>): Env =>
+    ({ METRICS: env.METRICS, ...over }) as unknown as Env;
+
+  it('delivers via the secret-gated webhook channel when enabled, then acks', async () => {
+    let hit: string | undefined;
+    const { fetcher } = recordingFetcher((url) => {
+      hit = url;
+      return Response.json({});
+    });
+    const b = oneMessageBatch(JOB);
+    await makeWorker({ fetcher }).queue(
+      b.batch,
+      envWith({
+        SIGNALS_ENABLED: 'true',
+        WEBHOOK_URL: 'https://hook.test/x',
+        WEBHOOK_SIGNING_SECRET: 'sek',
+      }),
+    );
+    expect(hit).toBe('https://hook.test/x');
+    expect(b.calls.acked).toBe(1);
+    expect(b.calls.retried).toBe(0);
+  });
+
+  it('drops without delivering when disabled (true kill switch)', async () => {
+    const f = recordingFetcher(() => Response.json({}));
+    const b = oneMessageBatch(JOB);
+    await makeWorker({ fetcher: f.fetcher }).queue(
+      b.batch,
+      envWith({
+        SIGNALS_ENABLED: 'false',
+        WEBHOOK_URL: 'https://hook.test/x',
+        WEBHOOK_SIGNING_SECRET: 'sek',
+      }),
+    );
+    expect(f.calls).toBe(0); // no outbound delivery
+    expect(b.calls.acked).toBe(1); // message dropped (acked), not retried
+  });
+});

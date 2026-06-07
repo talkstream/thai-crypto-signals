@@ -49,7 +49,7 @@ describe('consumeSignals (deliver -> ack/retry)', () => {
   it('acks and emits signal_delivered when there are no transient failures', async () => {
     const obs = new InMemoryObservabilitySink();
     const m = recorder(VALID);
-    await consumeSignals([m.message], notifierReturning({ delivered: 1 }), obs);
+    await consumeSignals([m.message], notifierReturning({ delivered: 1 }), obs, true);
 
     expect(m.acked).toBe(1);
     expect(m.retried).toBe(0);
@@ -63,6 +63,7 @@ describe('consumeSignals (deliver -> ack/retry)', () => {
       [m.message],
       notifierReturning({ transientFailures: 1, retryAfterSec: 30 }),
       obs,
+      true,
     );
 
     expect(m.acked).toBe(0);
@@ -74,7 +75,7 @@ describe('consumeSignals (deliver -> ack/retry)', () => {
   it('retries with NO options (platform default) when no retry hint is given', async () => {
     const obs = new InMemoryObservabilitySink();
     const m = recorder(VALID);
-    await consumeSignals([m.message], notifierReturning({ transientFailures: 1 }), obs);
+    await consumeSignals([m.message], notifierReturning({ transientFailures: 1 }), obs, true);
 
     expect(m.retried).toBe(1);
     expect(m.retryOpts[0]).toBeUndefined();
@@ -93,6 +94,7 @@ describe('consumeSignals (deliver -> ack/retry)', () => {
         },
       },
       obs,
+      true,
     );
 
     expect(m.acked).toBe(1);
@@ -101,11 +103,20 @@ describe('consumeSignals (deliver -> ack/retry)', () => {
     expect(obs.events.filter((e) => e.kind === 'signal_invalid').length).toBe(1);
   });
 
+  it('acks (drops) a job with a non-finite bucketTs as invalid', async () => {
+    const obs = new InMemoryObservabilitySink();
+    const m = recorder({ ...VALID, bucketTs: Number.POSITIVE_INFINITY });
+    await consumeSignals([m.message], notifierReturning({ delivered: 1 }), obs, true);
+
+    expect(m.acked).toBe(1);
+    expect(obs.events.some((e) => e.kind === 'signal_invalid')).toBe(true);
+  });
+
   it('acks (drops) an oversized job rather than 4xx-looping a channel', async () => {
     const obs = new InMemoryObservabilitySink();
     const huge = { ...VALID, symbols: Array.from({ length: 2001 }, (_, i) => `S${i}_THB`) };
     const m = recorder(huge);
-    await consumeSignals([m.message], notifierReturning({ delivered: 1 }), obs);
+    await consumeSignals([m.message], notifierReturning({ delivered: 1 }), obs, true);
 
     expect(m.acked).toBe(1);
     expect(obs.events.some((e) => e.kind === 'signal_invalid')).toBe(true);
@@ -114,19 +125,45 @@ describe('consumeSignals (deliver -> ack/retry)', () => {
   it('retries (does NOT drop) when deliver throws unexpectedly', async () => {
     const obs = new InMemoryObservabilitySink();
     const m = recorder(VALID);
-    await consumeSignals([m.message], throwingNotifier, obs);
+    await consumeSignals([m.message], throwingNotifier, obs, true);
 
     expect(m.acked).toBe(0);
     expect(m.retried).toBe(1);
     expect(obs.events.some((e) => e.kind === 'signal_consumer_error')).toBe(true);
   });
 
+  it('drops every message without delivering when signals are disabled (kill switch)', async () => {
+    const obs = new InMemoryObservabilitySink();
+    const m = recorder(VALID);
+    let delivered = false;
+    await consumeSignals(
+      [m.message],
+      {
+        deliver: async () => {
+          delivered = true;
+          return RESULT;
+        },
+      },
+      obs,
+      false,
+    );
+
+    expect(m.acked).toBe(1);
+    expect(m.retried).toBe(0);
+    expect(delivered).toBe(false); // disabled: no delivery, even for an otherwise-valid job
+    expect(obs.events.some((e) => e.kind === 'signal_disabled')).toBe(true);
+  });
+
   it('routes each message in a mixed batch independently', async () => {
     const obs = new InMemoryObservabilitySink();
     const good = recorder(VALID);
     const bad = recorder({ junk: true });
-    // one notifier instance is fine; the routing is decided per message before deliver()
-    await consumeSignals([good.message, bad.message], notifierReturning({ delivered: 1 }), obs);
+    await consumeSignals(
+      [good.message, bad.message],
+      notifierReturning({ delivered: 1 }),
+      obs,
+      true,
+    );
 
     expect(good.acked).toBe(1);
     expect(good.retried).toBe(0);
@@ -137,14 +174,14 @@ describe('consumeSignals (deliver -> ack/retry)', () => {
 
   it('does nothing on an empty batch', async () => {
     const obs = new InMemoryObservabilitySink();
-    await consumeSignals([], notifierReturning({ delivered: 1 }), obs);
+    await consumeSignals([], notifierReturning({ delivered: 1 }), obs, true);
     expect(obs.events.length).toBe(0);
   });
 
   it('defaults attempts to 0 when the message has no attempts field', async () => {
     const obs = new InMemoryObservabilitySink();
     const message: AckableMessage = { body: { bad: true }, ack: () => {}, retry: () => {} };
-    await consumeSignals([message], notifierReturning({ delivered: 1 }), obs);
+    await consumeSignals([message], notifierReturning({ delivered: 1 }), obs, true);
     expect(obs.events.find((e) => e.kind === 'signal_invalid')?.doubles.attempts).toBe(0);
   });
 });

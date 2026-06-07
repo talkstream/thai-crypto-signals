@@ -37,12 +37,13 @@ export class TelegramNotifier implements Notifier {
 
   async deliver(job: SignalJob): Promise<DeliveryResult> {
     if (!this.cfg) return R.skipped();
+    const text = formatSignalMessage(job); // local formatting, outside the transport try/catch
     let res: Response;
     try {
       res = await this.fetcher(`https://api.telegram.org/bot${this.cfg.botToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: this.cfg.chatId, text: formatSignalMessage(job) }),
+        body: JSON.stringify({ chat_id: this.cfg.chatId, text }),
       });
     } catch {
       return R.transient(); // network error — retry

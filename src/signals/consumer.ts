@@ -9,9 +9,12 @@ const MIN_RETRY_S = 5; // floor a transient retry so a flapping endpoint isn't h
 const MAX_RETRY_S = 86_400; // the queue's delaySeconds ceiling (24h)
 
 const SignalJobSchema = z.object({
-  bucketTs: z.number(),
+  // .finite() rejects Infinity/NaN: a non-finite bucketTs would otherwise throw in Intl date
+  // formatting (RangeError) or produce a garbage retry key — a permanently invalid body that would
+  // loop on retry instead of being dropped here.
+  bucketTs: z.number().finite(),
   symbols: z.array(z.string()).max(MAX_SYMBOLS_PER_JOB),
-  producedAt: z.number(),
+  producedAt: z.number().finite(),
   schemaVersion: z.literal(1),
 });
 
@@ -33,19 +36,30 @@ export interface AckableMessage {
  * Live queue consumer: parse -> deliver -> ack. Each message hits EXACTLY one of ack()/retry() inside
  * its own try/catch — never letting a throw escape, because a successful handler return ACKs (drops)
  * any un-dispositioned message by default, and a rejected handler retries the whole batch. Disposition:
+ *   - signals disabled (kill switch) -> emit + ack (drop; no delivery even for in-flight messages)
  *   - invalid body (or oversized)  -> emit + ack (it can never become valid; never retry)
  *   - any transient channel failure -> emit + retry (no ack); workerd retries up to max_retries -> DLQ
  *   - otherwise (delivered/skipped/permanent) -> emit + ack
  *   - unexpected throw -> emit + retry
+ *
+ * `signalsEnabled` gates the CONSUME side too: with the flag off, queued/redelivered messages are
+ * dropped, not delivered — so the committed `SIGNALS_ENABLED="false"` is a true delivery kill switch,
+ * not just an enqueue gate.
  */
 export async function consumeSignals(
   messages: readonly AckableMessage[],
   notifier: Notifier,
   obs: ObservabilitySink,
+  signalsEnabled: boolean,
 ): Promise<void> {
   for (const message of messages) {
     const attempts = message.attempts ?? 0;
     try {
+      if (!signalsEnabled) {
+        safeEvent(obs, 'signal_disabled', {}, { count: 1, attempts });
+        message.ack();
+        continue;
+      }
       const parsed = SignalJobSchema.safeParse(message.body);
       if (!parsed.success) {
         safeEvent(obs, 'signal_invalid', {}, { count: 1, attempts });

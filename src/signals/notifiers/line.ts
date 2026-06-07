@@ -23,6 +23,7 @@ export class LineNotifier implements Notifier {
 
   async deliver(job: SignalJob): Promise<DeliveryResult> {
     if (!this.cfg) return R.skipped();
+    const text = formatSignalMessage(job); // local formatting, outside the transport try/catch
     let res: Response;
     try {
       res = await this.fetcher('https://api.line.me/v2/bot/message/push', {
@@ -34,7 +35,7 @@ export class LineNotifier implements Notifier {
         },
         body: JSON.stringify({
           to: this.cfg.targetId,
-          messages: [{ type: 'text', text: formatSignalMessage(job) }],
+          messages: [{ type: 'text', text }],
         }),
       });
     } catch {
