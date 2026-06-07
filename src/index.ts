@@ -96,4 +96,8 @@ export function makeWorker(wiring: WorkerWiring) {
   };
 }
 
-export default makeWorker({ fetcher: globalThis.fetch });
+/* istanbul ignore next -- prod-only network wiring: resolve `fetch` at call time inside the handler
+   so it uses the per-request context. A reference captured at module-init (globalThis.fetch) does
+   NOT work for outbound subrequests in the Workers runtime. Verified by the deploy smoke test, not
+   unit tests (which inject their own recorded-response fetcher). */
+export default makeWorker({ fetcher: (input, init) => fetch(input, init) });
