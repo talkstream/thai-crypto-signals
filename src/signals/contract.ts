@@ -1,13 +1,15 @@
 /**
- * Compile-time contract for the DORMANT phase-2 signals subsystem.
+ * Compile-time contract for the DORMANT producer-side signals scaffold.
  *
- * Signals (producer, dispatcher, consumer, indicators, notifier) are a frozen phase-2 scaffold that
- * never runs in production: no producer is wired into the collect path and nothing is ever delivered.
- * Rather than exercise dead code with fakes, the subsystem is carved out of COVERAGE
- * (vitest.config.ts) — but it is still fully TYPE-CHECKED by `tsgo --noEmit` on every build (the
- * typecheck excludes nothing). This file makes that guarantee explicit: it is a static assertion that
- * the scaffold still honours its frozen ports, so the compiler (and CI) fail the moment it drifts.
- * No runtime, no mocks — this is how the mini-scope is "verified another way".
+ * The producer side (producer, dispatcher/adapter, indicators, notifier) is a frozen phase-2 scaffold
+ * with ZERO runtime callers — nothing is ever delivered. Rather than exercise dead code with fakes,
+ * it is carved out of COVERAGE (vitest.config.ts) — but still fully TYPE-CHECKED by `tsgo --noEmit`
+ * on every build (the typecheck excludes nothing). This file makes that guarantee explicit: static
+ * assertions that the scaffold still honours its frozen ports, so the compiler (and CI) fail the
+ * moment it drifts. No runtime, no mocks — the dead scaffold is "verified another way".
+ *
+ * The CONSUMER (src/signals/consumer.ts) is the live-but-dark exception: it IS wired into the
+ * worker's queue() handler, kept IN coverage, and tested in test/unit/signals-consumer.test.ts.
  */
 import type { QueueDispatcher } from '../adapters/signals/queue-dispatcher';
 import type { SignalDispatcher } from '../domain/ports';
@@ -21,8 +23,11 @@ export type DispatcherHonoursPort = Extends<QueueDispatcher, SignalDispatcher>;
 
 /**
  * The frozen wire shape: one batched job per tick (keeps queue ops tiny — see types.ts). Asserted
- * EXACTLY in BOTH directions, so a missing, changed, OR extra field on SignalJob fails typecheck.
+ * EXACTLY: the key SETS must match (an extra, optional, or missing key fails typecheck — assignability
+ * alone would let an optional field slip through), AND the shared field types must be mutually
+ * assignable (a changed field type fails too).
  */
 type FrozenJob = { bucketTs: number; symbols: string[]; producedAt: number; schemaVersion: 1 };
-export type JobHasNoExtraFields = Extends<SignalJob, FrozenJob>;
-export type JobHasEveryField = Extends<FrozenJob, SignalJob>;
+export type JobNoExtraKeys = Extends<Exclude<keyof SignalJob, keyof FrozenJob>, never>;
+export type JobNoMissingKeys = Extends<Exclude<keyof FrozenJob, keyof SignalJob>, never>;
+export type JobFieldTypesMatch = Extends<SignalJob, FrozenJob> & Extends<FrozenJob, SignalJob>;
