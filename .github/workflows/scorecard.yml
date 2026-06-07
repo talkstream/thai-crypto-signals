@@ -19,7 +19,6 @@ jobs:
     name: Scorecard analysis
     runs-on: ubuntu-latest
     permissions:
-      security-events: write # upload SARIF to code-scanning
       id-token: write # publish results to the public Scorecard API (renders the badge)
     steps:
       - name: Checkout
@@ -31,14 +30,8 @@ jobs:
         with:
           results_file: results.sarif
           results_format: sarif
+          # Publish to api.scorecard.dev so the README badge renders. We deliberately do NOT
+          # upload-sarif into GitHub code-scanning: that tab is reserved for CodeQL findings about
+          # OUR code, not Scorecard's repo-practice checks (branch-protection, code-review, etc.,
+          # which are visible via the badge link). Keeps the Security tab a true CodeQL signal.
           publish_results: true
-      - name: Upload artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: SARIF file
-          path: results.sarif
-          retention-days: 5
-      - name: Upload to code-scanning
-        uses: github/codeql-action/upload-sarif@dd903d2e4f5405488e5ef1422510ee31c8b32357 # v3
-        with:
-          sarif_file: results.sarif
