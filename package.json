@@ -15,8 +15,7 @@
   },
   "packageManager": "pnpm@10.33.2",
   "scripts": {
-    "typecheck": "tsgo --noEmit",
-    "typecheck:tsc": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "lint": "biome lint .",
     "format": "biome format --write .",
     "check": "biome check .",
@@ -45,11 +44,10 @@
     "@cloudflare/vitest-pool-workers": "0.16.13",
     "@commitlint/cli": "21.0.2",
     "@commitlint/config-conventional": "21.0.2",
-    "@typescript/native-preview": "7.0.0-dev.20260606.1",
     "@vitest/coverage-istanbul": "4.1.8",
     "fast-check": "4.8.0",
     "husky": "9.1.7",
-    "typescript": "6.0.3",
+    "typescript": "7.0.1-rc",
     "vitest": "4.1.8",
     "wrangler": "4.98.0"
   }

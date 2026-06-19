@@ -9,8 +9,8 @@
   "lockFileMaintenance": { "enabled": true },
   "packageRules": [
     {
-      "description": "Pin the tsgo native preview build explicitly; review each bump.",
-      "matchPackageNames": ["@typescript/native-preview"],
+      "description": "typescript pinned to the TS 7 RC (pre-release) — review each bump.",
+      "matchPackageNames": ["typescript"],
       "rangeStrategy": "pin"
     }
   ]
